@@ -1,7 +1,7 @@
 {
-  "version": "0.1.7",
-  "build": 10,
+  "version": "0.1.9",
+  "build": 12,
   "pubDate": "2026-07-04",
-  "url": "https://releases.headlessmac.com/MacHead-v0.1.7-macos-universal.dmg",
-  "releaseNotes": "1. 修复了升级覆盖完成后，新版本应用无法自动拉起重启的问题；\n2. 彻底移除了“已是最新版本”弹窗中 Build 字样的显示。"
+  "url": "https://releases.headlessmac.com/MacHead-v0.1.9-macos-universal.dmg",
+  "releaseNotes": "1. 偏好设置面板补充了“管理账号: admin”的展示，方便局域网网页控制台登录。"
 }
