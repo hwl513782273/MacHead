@@ -1,7 +1,7 @@
 {
-  "version": "1.1.0",
-  "build": 2,
+  "version": "0.1.7",
+  "build": 10,
   "pubDate": "2026-07-04",
-  "url": "http://localhost:5173/MacHead-v0.1.0-macos-universal.dmg",
-  "releaseNotes": "1. 升级了局域网 Web 控制台到最新 Cursor 极简人文设计风格；\n2. 解决了终端 CLI 工具跨进程通知时序 Bug；\n3. 优化了全局容器排版显示比例。"
+  "url": "https://releases.headlessmac.com/MacHead-v0.1.7-macos-universal.dmg",
+  "releaseNotes": "1. 修复了升级覆盖完成后，新版本应用无法自动拉起重启的问题；\n2. 彻底移除了“已是最新版本”弹窗中 Build 字样的显示。"
 }
