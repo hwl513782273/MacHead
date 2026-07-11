@@ -1,7 +1,7 @@
 {
-  "version": "0.1.11",
-  "build": 14,
-  "pubDate": "2026-07-04",
-  "url": "https://releases.headlessmac.com/MacHead-v0.1.11-macos-universal.dmg",
-  "releaseNotes": "1. Fix: correctly handle lightweight tags and fetch all tags in release workflow"
+  "version": "0.1.13",
+  "build": 16,
+  "pubDate": "2026-07-11",
+  "url": "https://releases.headlessmac.com/MacHead-v0.1.13-macos-universal.dmg",
+  "releaseNotes": "1. 修复了连接外接显示器时无法手动关闭 Headless 模式的缺陷； 2. 内部新增了对显示重配置状态的自动化集成测试套件。"
 }
