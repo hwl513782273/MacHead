@@ -1,7 +1,7 @@
 {
-  "version": "0.1.16",
-  "build": 20,
-  "pubDate": "2026-07-28",
-  "url": "https://releases.headlessmac.com/MacHead-v0.1.16-macos-universal.dmg",
-  "releaseNotes": "1. 增加哪吒监控实时连接状态指示器与智能错误诊断； 2. 修复哪吒配置弹窗尺寸偏小被遮挡的问题； 3. 优化配置修改体验，防止编辑输入时频繁断连重启。"
+  "version": "0.1.18",
+  "build": 22,
+  "pubDate": "2026-07-31",
+  "url": "https://releases.headlessmac.com/MacHead-v0.1.18-macos-universal.dmg",
+  "releaseNotes": "1. 修复哪吒监控 Agent 自动更新锁导致的死锁无法建立连接问题； 2. 增加启动前的临时锁目录自动清理逻辑。"
 }
