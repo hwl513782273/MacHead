@@ -812,6 +812,39 @@
                     </div>
                 </div>
                 
+                                <!-- Web Terminal Section -->
+                <div class="grid">
+                    <div class="card terminal-card" style="grid-column: 1 / -1; padding: 0; overflow: hidden;">
+                        <div class="terminal-header">
+                            <div class="terminal-title">
+                                <div class="terminal-dots">
+                                    <div class="terminal-dot dot-red"></div>
+                                    <div class="terminal-dot dot-yellow"></div>
+                                    <div class="terminal-dot dot-green"></div>
+                                </div>
+                                <span style="margin-left: 8px;"> MacHead Web PTY Terminal (Zsh)</span>
+                            </div>
+                            <div style="font-size: 11px; color: var(--text-muted); display: flex; align-items: center; gap: 6px;">
+                                <span class="pulse-dot" id="term-status-dot"></span>
+                                <span id="term-status-label">正在初始化 PTY...</span>
+                            </div>
+                        </div>
+                        <div id="terminal-view"></div>
+                        <div class="terminal-toolbar">
+                            <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                                <button class="term-btn" onclick="sendTermShortcut('\x03')">Ctrl+C 中断</button>
+                                <button class="term-btn" onclick="sendTermShortcut('clear\r')">Clear 清屏</button>
+                                <button class="term-btn" onclick="sendTermShortcut('top -o cpu\r')">top 进程</button>
+                                <button class="term-btn" onclick="sendTermShortcut('df -h\r')">df -h 磁盘</button>
+                                <button class="term-btn" onclick="sendTermShortcut('pmset -g assertions\r')">电源断言</button>
+                            </div>
+                            <div>
+                                <button class="term-btn" onclick="reconnectTerminal()">重新连接终端</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="grid">
                     <!-- Controls Card -->
                     <div class="card" style="grid-column: 1 / -1;">
@@ -1549,7 +1582,8 @@
 
                 window.addEventListener("DOMContentLoaded", initTerminal);
 
-fetchStatus();
+initTerminal();
+                fetchStatus();
                 // Prime peaks UI immediately
                 updatePeakUI('cpu');
                 updatePeakUI('ram');
