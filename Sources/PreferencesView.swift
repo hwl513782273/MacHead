@@ -220,6 +220,71 @@ struct PreferencesView: View {
     @State private var overheatAlertEnabled = UserDefaults.standard.bool(forKey: "overheatAlertEnabled")
     @State private var overheatThreshold = UserDefaults.standard.double(forKey: "overheatThreshold") == 0 ? 85.0 : UserDefaults.standard.double(forKey: "overheatThreshold")
 
+    
+
+
+        @State private var devTunnelEnabled = UserDefaults.standard.bool(forKey: "devTunnelEnabled")
+    @State private var devTunnelMode = UserDefaults.standard.string(forKey: "devTunnelMode") ?? "login"
+    @State private var devTunnelId = UserDefaults.standard.string(forKey: "devTunnelId") ?? ""
+    @State private var devTunnelToken = UserDefaults.standard.string(forKey: "devTunnelToken") ?? ""
+    @State private var devTunnelAllowAnonymous = UserDefaults.standard.object(forKey: "devTunnelAllowAnonymous") != nil ? UserDefaults.standard.bool(forKey: "devTunnelAllowAnonymous") : true
+    @State private var devTunnelPortRules: [DevTunnelPortRule] = DevTunnelService.loadPortRules()
+    @State private var devTunnelEnableSSH = UserDefaults.standard.bool(forKey: "devTunnelEnableSSH")
+    @State private var devTunnelStatus: DevTunnelStatus = DevTunnelService.shared.currentStatus
+    @State private var showDevTunnelConfig = false
+    @State private var isDevTunnelConfigModified = false
+    @State private var isDevTunnelTesting = false
+    @State private var devTunnelTestResult: (success: Bool, message: String)? = nil
+    @State private var devTunnelLoggedInUser: String? = DevTunnelService.shared.checkUserLoginStatus()
+    @State private var isDevTunnelLoggingIn = false
+    @State private var devTunnelQuota: DevTunnelQuotaInfo? = nil
+    @State private var isQueryingLimits = false
+
+    private var devTunnelStatusColor: Color {
+        switch devTunnelStatus {
+        case .connected: return .green
+        case .connecting: return .orange
+        case .error: return .red
+        case .stopped: return .gray
+        }
+    }
+
+    private var devTunnelStatusBadgeText: String {
+        switch devTunnelStatus {
+        case .connected: return "已连接"
+        case .connecting: return "连接中..."
+        case .error: return "连接失败"
+        case .stopped: return "已停用"
+        }
+    }
+
+    @State private var cloudflareEnabled = UserDefaults.standard.bool(forKey: "cloudflareEnabled")
+    @State private var cloudflareBinaryPath = UserDefaults.standard.string(forKey: "cloudflareBinaryPath") ?? ""
+    @State private var cloudflareToken = UserDefaults.standard.string(forKey: "cloudflareToken") ?? ""
+    @State private var cloudflareStatus: CloudflareStatus = CloudflareService.shared.currentStatus
+    @State private var showCloudflareConfig = false
+    @State private var isCloudflareConfigModified = false
+    @State private var isCloudflareTesting = false
+    @State private var cloudflareTestResult: (success: Bool, message: String)? = nil
+
+    private var cloudflareStatusColor: Color {
+        switch cloudflareStatus {
+        case .connected: return .green
+        case .connecting: return .orange
+        case .error: return .red
+        case .stopped: return .gray
+        }
+    }
+
+    private var cloudflareStatusBadgeText: String {
+        switch cloudflareStatus {
+        case .connected: return "已连接"
+        case .connecting: return "连接中..."
+        case .error: return "连接失败"
+        case .stopped: return "已停用"
+        }
+    }
+
     @State private var selectedTab = PreferenceTab.general
 
     // Modals visibility states for Switch + Button (设定...) sheets
@@ -652,6 +717,196 @@ struct PreferencesView: View {
                                 }
                             }
                             
+                            
+                            
+                            SettingsCard(title: "Microsoft Dev Tunnels 穿透服务") {
+                                SettingsRow("启用 Dev Tunnels (微软中继)") {
+                                    HStack(spacing: 10) {
+                                        if devTunnelEnabled {
+                                            HStack(spacing: 4) {
+                                                Circle()
+                                                    .fill(devTunnelStatusColor)
+                                                    .frame(width: 6, height: 6)
+                                                Text(devTunnelStatusBadgeText)
+                                                    .font(.caption2)
+                                                    .fontWeight(.medium)
+                                                    .foregroundColor(devTunnelStatusColor)
+                                            }
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 3)
+                                            .background(devTunnelStatusColor.opacity(0.12))
+                                            .cornerRadius(5)
+                                        }
+
+                                        Toggle("", isOn: Binding(
+                                            get: { self.devTunnelEnabled },
+                                            set: { newValue in
+                                                self.devTunnelEnabled = newValue
+                                                UserDefaults.standard.set(newValue, forKey: "devTunnelEnabled")
+                                                if newValue {
+                                                    DevTunnelService.shared.start()
+                                                } else {
+                                                    DevTunnelService.shared.stop()
+                                                }
+                                            }
+                                        ))
+                                        .toggleStyle(.switch)
+                                        .labelsHidden()
+                                        
+                                        Button("设定...") {
+                                            self.isDevTunnelConfigModified = false
+                                            self.devTunnelTestResult = nil
+                                            self.devTunnelLoggedInUser = DevTunnelService.shared.checkUserLoginStatus()
+                                            DevTunnelService.shared.queryUserLimits { info in
+                                                self.devTunnelQuota = info
+                                            }
+                                            self.showDevTunnelConfig = true
+                                        }
+                                    }
+                                }
+                                
+                                if case .connected(let webUrl, _) = devTunnelStatus, devTunnelEnabled {
+                                    Divider().padding(.horizontal, 16)
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        let portUrls = DevTunnelService.shared.activePortUrls
+                                        if !portUrls.isEmpty {
+                                            ForEach(portUrls.keys.sorted(), id: \.self) { port in
+                                                if let url = portUrls[port] {
+                                                    HStack(spacing: 8) {
+                                                        Image(systemName: port == "22" ? "terminal" : "link")
+                                                            .foregroundColor(port == "22" ? .purple : .green)
+                                                            .font(.caption)
+                                                        
+                                                        let ruleName = devTunnelPortRules.first(where: { $0.port == port })?.name ?? "端口 \(port)"
+                                                        Text("\(ruleName) (\(port)):")
+                                                            .font(.caption2)
+                                                            .foregroundColor(.secondary)
+                                                        
+                                                        Text(url)
+                                                            .font(.system(.caption, design: .monospaced))
+                                                            .foregroundColor(.primary)
+                                                            .lineLimit(1)
+                                                        
+                                                        Spacer()
+                                                        
+                                                        Button(action: {
+                                                            NSPasteboard.general.clearContents()
+                                                            NSPasteboard.general.setString(url, forType: .string)
+                                                        }) {
+                                                            Text("复制")
+                                                                .font(.caption2)
+                                                        }
+                                                        .buttonStyle(.plain)
+                                                        .padding(.horizontal, 8)
+                                                        .padding(.vertical, 2)
+                                                        .background(Color.green.opacity(0.15))
+                                                        .cornerRadius(4)
+                                                    }
+                                                }
+                                            }
+                                        } else {
+                                            HStack(spacing: 8) {
+                                                Image(systemName: "link")
+                                                    .foregroundColor(.green)
+                                                    .font(.caption)
+                                                Text(webUrl)
+                                                    .font(.system(.caption, design: .monospaced))
+                                                    .foregroundColor(.primary)
+                                                    .lineLimit(1)
+                                                Spacer()
+                                                Button(action: {
+                                                    NSPasteboard.general.clearContents()
+                                                    NSPasteboard.general.setString(webUrl, forType: .string)
+                                                }) {
+                                                    Text("复制")
+                                                        .font(.caption2)
+                                                }
+                                                .buttonStyle(.plain)
+                                                .padding(.horizontal, 8)
+                                                .padding(.vertical, 2)
+                                                .background(Color.green.opacity(0.15))
+                                                .cornerRadius(4)
+                                            }
+                                        }
+                                    }
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 8)
+                                }
+                                
+                                if case .error(let msg) = devTunnelStatus, devTunnelEnabled {
+                                    Divider().padding(.horizontal, 16)
+                                    HStack(alignment: .top, spacing: 8) {
+                                        Image(systemName: "exclamationmark.triangle.fill")
+                                            .foregroundColor(.orange)
+                                            .font(.caption)
+                                        Text(msg)
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 8)
+                                }
+                            }
+
+                            SettingsCard(title: "Cloudflare Tunnel 穿透服务") {
+                                SettingsRow("启用 Cloudflare Tunnel (cloudflared)") {
+                                    HStack(spacing: 10) {
+                                        if cloudflareEnabled {
+                                            HStack(spacing: 4) {
+                                                Circle()
+                                                    .fill(cloudflareStatusColor)
+                                                    .frame(width: 6, height: 6)
+                                                Text(cloudflareStatusBadgeText)
+                                                    .font(.caption2)
+                                                    .fontWeight(.medium)
+                                                    .foregroundColor(cloudflareStatusColor)
+                                            }
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 3)
+                                            .background(cloudflareStatusColor.opacity(0.12))
+                                            .cornerRadius(5)
+                                        }
+
+                                        Toggle("", isOn: Binding(
+                                            get: { self.cloudflareEnabled },
+                                            set: { newValue in
+                                                self.cloudflareEnabled = newValue
+                                                UserDefaults.standard.set(newValue, forKey: "cloudflareEnabled")
+                                                if newValue {
+                                                    CloudflareService.shared.start()
+                                                } else {
+                                                    CloudflareService.shared.stop()
+                                                }
+                                            }
+                                        ))
+                                        .toggleStyle(.switch)
+                                        .labelsHidden()
+                                        
+                                        Button("设定...") {
+                                            self.isCloudflareConfigModified = false
+                                            self.cloudflareTestResult = nil
+                                            self.showCloudflareConfig = true
+                                        }
+                                    }
+                                }
+                                
+                                if case .error(let msg) = cloudflareStatus, cloudflareEnabled {
+                                    Divider().padding(.horizontal, 16)
+                                    HStack(alignment: .top, spacing: 8) {
+                                        Image(systemName: "exclamationmark.triangle.fill")
+                                            .foregroundColor(.orange)
+                                            .font(.caption)
+                                        Text(msg)
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 8)
+                                }
+                            }
+
                             SettingsCard(title: "FRP 内网穿透服务") {
                                 SettingsRow("启用 FRP 客户端 (frpc)") {
                                     HStack(spacing: 10) {
@@ -720,6 +975,9 @@ struct PreferencesView: View {
                             }
                             
                         case .status:
+                            
+
+
                             SettingsCard(title: "显示器与 Headless 守护策略") {
                                 SettingsRow("断开全部外屏时自动恢复内屏") {
                                     Toggle("", isOn: $autoExitOnDisconnect)
@@ -1240,6 +1498,418 @@ struct PreferencesView: View {
         // ------------------ Uptime Kuma 配置弹窗 ------------------
         // ------------------ FRP 内网穿透配置弹窗 ------------------
         // ------------------ FRP 内网穿透配置弹窗 ------------------
+        
+        // ------------------ Cloudflare Tunnel 配置弹窗 ------------------
+        .sheet(isPresented: $showCloudflareConfig) {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    Image(systemName: "cloud.fill")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(.orange)
+                    Text("Cloudflare Tunnel 配置 (cloudflared)")
+                        .font(.headline)
+                    Spacer()
+                }
+                
+                Text("输入您的 Cloudflare Tunnel 运行 Token。应用将在后台自动调用内置的 cloudflared 客户端建立免公网 IP 穿透隧道。")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Tunnel Token")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    SecureField("输入 eyJh... 格式的 Cloudflare Token", text: Binding(
+                        get: { self.cloudflareToken },
+                        set: { newValue in
+                            if self.cloudflareToken != newValue {
+                                self.cloudflareToken = newValue
+                                self.isCloudflareConfigModified = true
+                            }
+                        }
+                    ))
+                        .textFieldStyle(.roundedBorder)
+                }
+                
+                if let result = cloudflareTestResult {
+                    HStack(spacing: 8) {
+                        Image(systemName: result.success ? "checkmark.circle.fill" : "xmark.circle.fill")
+                            .foregroundColor(result.success ? .green : .red)
+                            .font(.caption)
+                        Text(result.message)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(result.success ? Color.green.opacity(0.1) : Color.red.opacity(0.1))
+                    .cornerRadius(6)
+                }
+                
+                HStack {
+                    Button(action: {
+                        self.isCloudflareTesting = true
+                        self.cloudflareTestResult = nil
+                        CloudflareService.shared.testConnection(token: self.cloudflareToken) { success, message in
+                            self.isCloudflareTesting = false
+                            self.cloudflareTestResult = (success, message)
+                        }
+                    }) {
+                        HStack(spacing: 6) {
+                            if isCloudflareTesting {
+                                ProgressView()
+                                    .controlSize(.small)
+                            }
+                            Text(isCloudflareTesting ? "正在测试..." : "测试连接")
+                        }
+                    }
+                    .disabled(isCloudflareTesting || cloudflareToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    
+                    Spacer()
+                    
+                    Button("取消") {
+                        self.cloudflareTestResult = nil
+                        self.showCloudflareConfig = false
+                    }
+                    .buttonStyle(.plain)
+                    
+                    Button("保存并应用") {
+                        self.cloudflareTestResult = nil
+                        if self.isCloudflareConfigModified {
+                            self.isCloudflareConfigModified = false
+                            UserDefaults.standard.set(self.cloudflareToken, forKey: "cloudflareToken")
+                            IntegrationManager.shared.reloadServices()
+                        }
+                        self.showCloudflareConfig = false
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+            }
+            .padding(20)
+            .frame(width: 440)
+        }
+
+        
+        // ------------------ Dev Tunnels 配置弹窗 ------------------
+        .sheet(isPresented: $showDevTunnelConfig) {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    Image(systemName: "network.badge.shield.half.filled")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(.blue)
+                    Text("Microsoft Dev Tunnels 配置")
+                        .font(.headline)
+                    Spacer()
+                }
+                
+                Text("微软官方提供的安全跨网穿透隧道。通过 Azure Relay 边缘网络建立公网访问，支持自动端口多路复用与 GitHub 身份鉴权。")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                
+                // Account Login Status Card
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("微软 / GitHub 账号鉴权")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                    
+                    HStack {
+                        if let user = devTunnelLoggedInUser {
+                            Image(systemName: "checkmark.seal.fill")
+                                .foregroundColor(.green)
+                            Text("已登录: \(user)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .lineLimit(1)
+                            Spacer()
+                            Button("退出登录") {
+                                DevTunnelService.shared.logout()
+                                self.devTunnelLoggedInUser = nil
+                            }
+                            .controlSize(.small)
+                        } else {
+                            Image(systemName: "person.crop.circle.badge.questionmark")
+                                .foregroundColor(.orange)
+                            Text("尚未登录账号 (可通过浏览器一键授权)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            Button(action: {
+                                self.isDevTunnelLoggingIn = true
+                                DevTunnelService.shared.loginWithBrowser(provider: "github") { success, msg in
+                                    self.isDevTunnelLoggingIn = false
+                                    self.devTunnelLoggedInUser = DevTunnelService.shared.checkUserLoginStatus()
+                                }
+                            }) {
+                                HStack(spacing: 4) {
+                                    if isDevTunnelLoggingIn {
+                                        ProgressView().controlSize(.small)
+                                    }
+                                    Text("登录 GitHub 账号")
+                                }
+                            }
+                            .controlSize(.small)
+                        }
+                    }
+                    .padding(8)
+                    .background(Color.primary.opacity(0.04))
+                    .cornerRadius(6)
+                }
+                
+                // Quota & Traffic Usage Card
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("月度流量与配额状态")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                        Spacer()
+                        if isQueryingLimits {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Button("刷新配额") {
+                                self.isQueryingLimits = true
+                                DevTunnelService.shared.queryUserLimits { info in
+                                    self.isQueryingLimits = false
+                                    self.devTunnelQuota = info
+                                }
+                            }
+                            .buttonStyle(.plain)
+                            .font(.caption2)
+                            .foregroundColor(.accentColor)
+                        }
+                    }
+                    
+                    if let quota = devTunnelQuota {
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                Text("已用流量: \(String(format: "%.2f", quota.bandwidthUsedGB)) GB / \(String(format: "%.1f", quota.bandwidthLimitGB)) GB")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                                Text("\(Int(quota.bandwidthPercent))%")
+                                    .font(.caption2)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(quota.bandwidthPercent > 85 ? .red : (quota.bandwidthPercent > 60 ? .orange : .green))
+                            }
+                            
+                            ProgressView(value: quota.bandwidthPercent, total: 100.0)
+                                .accentColor(quota.bandwidthPercent > 85 ? .red : (quota.bandwidthPercent > 60 ? .orange : .blue))
+                            
+                            HStack {
+                                Text("活跃隧道数: \(quota.currentTunnels) / \(quota.maxTunnels)")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .padding(8)
+                        .background(Color.primary.opacity(0.04))
+                        .cornerRadius(6)
+                    } else {
+                        HStack {
+                            Text("微软官方免费配额：每月 5 GB 流量，支持 10 条隧道与多端口多路复用。")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(8)
+                        .background(Color.primary.opacity(0.04))
+                        .cornerRadius(6)
+                    }
+                }
+                
+                // Mode selector
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("隧道模式")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Picker("", selection: Binding(
+                        get: { self.devTunnelMode },
+                        set: { self.devTunnelMode = $0; self.isDevTunnelConfigModified = true }
+                    )) {
+                        Text("账号自动模式 (推荐)").tag("login")
+                        Text("Access Token 模式").tag("token")
+                    }
+                    .pickerStyle(.segmented)
+                }
+                
+                if devTunnelMode == "token" {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Tunnel ID (选填)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        TextField("例如: machead-server", text: Binding(
+                            get: { self.devTunnelId },
+                            set: { self.devTunnelId = $0; self.isDevTunnelConfigModified = true }
+                        ))
+                        .textFieldStyle(.roundedBorder)
+                        
+                        Text("Access Token")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        SecureField("输入 devtunnel 生成的 Access Token", text: Binding(
+                            get: { self.devTunnelToken },
+                            set: { self.devTunnelToken = $0; self.isDevTunnelConfigModified = true }
+                        ))
+                        .textFieldStyle(.roundedBorder)
+                    }
+                }
+                
+                // Local Port Forwarding Rules
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("本地端口映射配置")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                        Spacer()
+                        Button(action: {
+                            var rules = self.devTunnelPortRules
+                            rules.append(DevTunnelPortRule(name: "自定义服务 \(rules.count + 1)", port: "", protocolType: "auto", isEnabled: true))
+                            self.devTunnelPortRules = rules
+                            self.isDevTunnelConfigModified = true
+                        }) {
+                            HStack(spacing: 3) {
+                                Image(systemName: "plus.circle.fill")
+                                Text("添加端口")
+                            }
+                            .font(.caption2)
+                            .foregroundColor(.accentColor)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    
+                    VStack(spacing: 6) {
+                        ForEach(devTunnelPortRules.indices, id: \.self) { idx in
+                            HStack(spacing: 8) {
+                                Toggle("", isOn: Binding(
+                                    get: { devTunnelPortRules[idx].isEnabled },
+                                    set: { devTunnelPortRules[idx].isEnabled = $0; isDevTunnelConfigModified = true }
+                                ))
+                                .toggleStyle(.checkbox)
+                                .labelsHidden()
+                                
+                                TextField("服务名称", text: Binding(
+                                    get: { devTunnelPortRules[idx].name },
+                                    set: { devTunnelPortRules[idx].name = $0; isDevTunnelConfigModified = true }
+                                ))
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 130)
+                                
+                                TextField("本地端口", text: Binding(
+                                    get: { devTunnelPortRules[idx].port },
+                                    set: { devTunnelPortRules[idx].port = $0; isDevTunnelConfigModified = true }
+                                ))
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 75)
+                                
+                                Picker("", selection: Binding(
+                                    get: { devTunnelPortRules[idx].protocolType },
+                                    set: { devTunnelPortRules[idx].protocolType = $0; isDevTunnelConfigModified = true }
+                                )) {
+                                    Text("Auto").tag("auto")
+                                    Text("HTTP").tag("http")
+                                    Text("HTTPS").tag("https")
+                                }
+                                .pickerStyle(.menu)
+                                .frame(width: 85)
+                                
+                                if devTunnelPortRules.count > 1 {
+                                    Button(action: {
+                                        var rules = self.devTunnelPortRules
+                                        rules.remove(at: idx)
+                                        self.devTunnelPortRules = rules
+                                        self.isDevTunnelConfigModified = true
+                                    }) {
+                                        Image(systemName: "trash")
+                                            .foregroundColor(.red.opacity(0.8))
+                                            .font(.caption)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
+                    }
+                    .padding(8)
+                    .background(Color.primary.opacity(0.04))
+                    .cornerRadius(8)
+                    
+                    Toggle("允许公网匿名访问 (免 GitHub OAuth 拦截)", isOn: Binding(
+                        get: { self.devTunnelAllowAnonymous },
+                        set: { self.devTunnelAllowAnonymous = $0; self.isDevTunnelConfigModified = true }
+                    ))
+                    .toggleStyle(.checkbox)
+                    .font(.caption)
+                    .padding(.top, 4)
+                }
+                
+                // Test result banner
+                if let result = devTunnelTestResult {
+                    HStack(spacing: 8) {
+                        Image(systemName: result.success ? "checkmark.circle.fill" : "xmark.circle.fill")
+                            .foregroundColor(result.success ? .green : .red)
+                            .font(.caption)
+                        Text(result.message)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(result.success ? Color.green.opacity(0.1) : Color.red.opacity(0.1))
+                    .cornerRadius(6)
+                }
+                
+                HStack {
+                    Button(action: {
+                        self.isDevTunnelTesting = true
+                        self.devTunnelTestResult = nil
+                        DevTunnelService.shared.testConnection(
+                            mode: self.devTunnelMode,
+                            tunnelId: self.devTunnelId,
+                            token: self.devTunnelToken,
+                            allowAnonymous: self.devTunnelAllowAnonymous,
+                            rules: self.devTunnelPortRules
+                        ) { success, msg in
+                            self.isDevTunnelTesting = false
+                            self.devTunnelTestResult = (success, msg)
+                        }
+                    }) {
+                        HStack(spacing: 6) {
+                            if isDevTunnelTesting {
+                                ProgressView().controlSize(.small)
+                            }
+                            Text(isDevTunnelTesting ? "正在测试..." : "测试连接")
+                        }
+                    }
+                    .disabled(isDevTunnelTesting)
+                    
+                    Spacer()
+                    
+                    Button("取消") {
+                        self.devTunnelTestResult = nil
+                        self.showDevTunnelConfig = false
+                    }
+                    .buttonStyle(.plain)
+                    
+                    Button("保存并应用") {
+                        self.devTunnelTestResult = nil
+                        if self.isDevTunnelConfigModified {
+                            self.isDevTunnelConfigModified = false
+                            DevTunnelService.savePortRules(self.devTunnelPortRules)
+                            UserDefaults.standard.set(self.devTunnelMode, forKey: "devTunnelMode")
+                            UserDefaults.standard.set(self.devTunnelId, forKey: "devTunnelId")
+                            UserDefaults.standard.set(self.devTunnelToken, forKey: "devTunnelToken")
+                            UserDefaults.standard.set(self.devTunnelAllowAnonymous, forKey: "devTunnelAllowAnonymous")
+                            UserDefaults.standard.set(self.devTunnelEnableSSH, forKey: "devTunnelEnableSSH")
+                            IntegrationManager.shared.reloadServices()
+                        }
+                        self.showDevTunnelConfig = false
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+            }
+            .padding(20)
+            .frame(width: 460)
+        }
+
         .sheet(isPresented: $showFrpConfig) {
             VStack(alignment: .leading, spacing: 16) {
                 HStack {
@@ -1674,6 +2344,19 @@ struct PreferencesView: View {
             updateConnectedDisplays()
             updateBatteryState()
         }
+        
+                .onReceive(NotificationCenter.default.publisher(for: .devTunnelStatusChanged)) { notif in
+            if let status = notif.object as? DevTunnelStatus {
+                self.devTunnelStatus = status
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .cloudflareStatusChanged)) { notif in
+            if let status = notif.object as? CloudflareStatus {
+                self.cloudflareStatus = status
+            }
+        }
+
+
         .onReceive(NotificationCenter.default.publisher(for: .frpStatusChanged)) { notif in
             if let status = notif.object as? FrpStatus {
                 self.frpStatus = status

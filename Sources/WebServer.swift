@@ -1,3 +1,4 @@
+import CommonCrypto
 import Foundation
 import Network
 import SystemConfiguration
@@ -130,6 +131,32 @@ final class WebServer {
             }
             
             // Validate Authorization: Cookie session first, then HTTP Basic Auth fallback
+            if path == "/ws/terminal" || requestStr.contains("Upgrade: websocket") {
+                var secKey = ""
+                for line in lines {
+                    if line.lowercased().hasPrefix("sec-websocket-key:") {
+                        let parts = line.components(separatedBy: ":")
+                        if parts.count >= 2 {
+                            secKey = parts[1].trimmingCharacters(in: .whitespacesAndNewlines)
+                        }
+                    }
+                }
+                let acceptKey = self.computeWebSocketAccept(key: secKey)
+                let handshakeStr = "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: \(acceptKey)\r\n\r\n"
+                if let handshakeData = handshakeStr.data(using: .utf8) {
+                    connection.send(content: handshakeData, completion: .contentProcessed({ error in
+                        if error == nil {
+                            self.handleTerminalWebSocketSession(connection: connection)
+                        } else {
+                            connection.cancel()
+                        }
+                    }))
+                } else {
+                    connection.cancel()
+                }
+                return
+            }
+
             if !self.verifyAuthorization(headers: lines) {
                 if path.hasPrefix("/api/") {
                     self.sendJSONUnauthorizedResponse(connection: connection)
@@ -139,7 +166,7 @@ final class WebServer {
                 return
             }
             
-            self.routeRequest(method: method, path: path, connection: connection)
+            self.routeRequest(method: method, path: path, bodyPart: bodyPart, connection: connection)
         }
     }
     
@@ -184,7 +211,7 @@ final class WebServer {
         sendResponse(statusCode: 302, statusText: "Found", content: content, contentType: "text/plain", extraHeaders: redirectHeaders, connection: connection)
     }
     
-    private func routeRequest(method: String, path: String, connection: NWConnection) {
+    private func routeRequest(method: String, path: String, bodyPart: String = "", connection: NWConnection) {
         if method == "GET" && path == "/" {
             sendResponse(html: getDashboardHTML(), connection: connection)
         } else if method == "GET" && path == "/api/status" {
@@ -256,6 +283,29 @@ final class WebServer {
                 let val = !UserDefaults.standard.bool(forKey: key)
                 UserDefaults.standard.set(val, forKey: key)
                 NotificationCenter.default.post(name: .headlessModeStateChanged, object: nil)
+                self.sendResponse(json: self.getStatusJSON(), connection: connection)
+            }
+
+        } else if method == "POST" && path == "/api/toggle-cloudflare" {
+            DispatchQueue.main.async {
+                let key = "cloudflareEnabled"
+                let val = !UserDefaults.standard.bool(forKey: key)
+                UserDefaults.standard.set(val, forKey: key)
+                IntegrationManager.shared.reloadServices()
+                NotificationCenter.default.post(name: .headlessModeStateChanged, object: nil)
+                self.sendResponse(json: self.getStatusJSON(), connection: connection)
+            }
+        } else if method == "POST" && path == "/api/save-cloudflare-token" {
+            DispatchQueue.main.async {
+                let pairs = bodyPart.components(separatedBy: "&")
+                for pair in pairs {
+                    let kv = pair.components(separatedBy: "=")
+                    if kv.count == 2 && kv[0] == "token" {
+                        let tokenVal = kv[1].removingPercentEncoding ?? ""
+                        UserDefaults.standard.set(tokenVal, forKey: "cloudflareToken")
+                    }
+                }
+                IntegrationManager.shared.reloadServices()
                 self.sendResponse(json: self.getStatusJSON(), connection: connection)
             }
         } else if method == "POST" && path == "/api/toggle-restore-on-connect" {
@@ -456,7 +506,10 @@ final class WebServer {
           "rxSpeed": \(rxSpeed),
           "txSpeed": \(txSpeed),
           "frpEnabled": \(UserDefaults.standard.bool(forKey: "frpEnabled")),
-          "frpRunning": \(FrpService.shared.isRunning())
+          "frpRunning": \(FrpService.shared.isRunning()),
+          "cloudflareEnabled": \(UserDefaults.standard.bool(forKey: "cloudflareEnabled")),
+          "cloudflareStatus": "\(CloudflareService.shared.currentStatus.displayText)",
+          "cloudflareToken": "\(UserDefaults.standard.string(forKey: "cloudflareToken") ?? "")"
         }
         """
     }
@@ -734,5 +787,110 @@ final class WebServer {
         </html>
         """
     }
-}
 
+    private func computeWebSocketAccept(key: String) -> String {
+        let magic = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+        let combined = key.trimmingCharacters(in: .whitespacesAndNewlines) + magic
+        guard let data = combined.data(using: .utf8) else { return "" }
+        
+        var digest = [UInt8](repeating: 0, count: Int(CC_SHA1_DIGEST_LENGTH))
+        data.withUnsafeBytes {
+            _ = CC_SHA1($0.baseAddress, CC_LONG(data.count), &digest)
+        }
+        return Data(digest).base64EncodedString()
+    }
+    
+    private func handleTerminalWebSocketSession(connection: NWConnection) {
+        let pty = PTYTerminalSession()
+        guard pty.start(cols: 120, rows: 30) else {
+            connection.cancel()
+            return
+        }
+        
+        pty.onOutput = { [weak self] data in
+            self?.sendWebSocketFrame(data: data, opcode: 0x1, connection: connection)
+        }
+        
+        pty.onTerminated = {
+            connection.cancel()
+        }
+        
+        func receiveNextFrame() {
+            connection.receive(minimumIncompleteLength: 2, maximumLength: 65536) { [weak self] data, context, isComplete, error in
+                guard let self = self, let data = data, !data.isEmpty else {
+                    pty.terminate()
+                    return
+                }
+                
+                if let payload = self.parseClientWebSocketFrame(data: data) {
+                    if let str = String(data: payload, encoding: .utf8), str.contains("\"type\":\"resize\""),
+                       let json = try? JSONSerialization.jsonObject(with: payload) as? [String: Any],
+                       let cols = json["cols"] as? Int, let rows = json["rows"] as? Int {
+                        pty.resize(cols: cols, rows: rows)
+                    } else {
+                        pty.writeInput(payload)
+                    }
+                }
+                
+                if !isComplete && error == nil {
+                    receiveNextFrame()
+                } else {
+                    pty.terminate()
+                }
+            }
+        }
+        
+        receiveNextFrame()
+    }
+    
+    private func sendWebSocketFrame(data: Data, opcode: UInt8, connection: NWConnection) {
+        var frame = Data()
+        frame.append(0x80 | (opcode & 0x0F))
+        if data.count < 126 {
+            frame.append(UInt8(data.count))
+        } else if data.count <= 65535 {
+            frame.append(126)
+            var len = UInt16(data.count).bigEndian
+            frame.append(Data(bytes: &len, count: 2))
+        } else {
+            frame.append(127)
+            var len = UInt64(data.count).bigEndian
+            frame.append(Data(bytes: &len, count: 8))
+        }
+        frame.append(data)
+        connection.send(content: frame, completion: .idempotent)
+    }
+    
+    private func parseClientWebSocketFrame(data: Data) -> Data? {
+        guard data.count >= 2 else { return nil }
+        let byte1 = data[1]
+        let masked = (byte1 & 0x80) != 0
+        var len = Int(byte1 & 0x7F)
+        var offset = 2
+        
+        if len == 126 {
+            guard data.count >= 4 else { return nil }
+            len = Int(data[2]) << 8 | Int(data[3])
+            offset = 4
+        } else if len == 127 {
+            guard data.count >= 10 else { return nil }
+            offset = 10
+        }
+        
+        var maskKey = [UInt8]()
+        if masked {
+            guard data.count >= offset + 4 else { return nil }
+            maskKey = Array(data[offset..<offset+4])
+            offset += 4
+        }
+        
+        guard data.count >= offset + len else { return nil }
+        var payload = Array(data[offset..<offset+len])
+        if masked {
+            for i in 0..<len {
+                payload[i] ^= maskKey[i % 4]
+            }
+        }
+        return Data(payload)
+    }
+}

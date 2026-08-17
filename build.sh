@@ -93,6 +93,14 @@ if [ -f "Resources/frpc" ]; then
   cp Resources/frpc "${APP_DIR}/Contents/Resources/frpc"
   chmod +x "${APP_DIR}/Contents/Resources/frpc"
 fi
+if [ -f "Resources/cloudflared" ]; then
+  cp Resources/cloudflared "${APP_DIR}/Contents/Resources/cloudflared"
+  chmod +x "${APP_DIR}/Contents/Resources/cloudflared"
+fi
+if [ -f "Resources/devtunnel" ]; then
+  cp Resources/devtunnel "${APP_DIR}/Contents/Resources/devtunnel"
+  chmod +x "${APP_DIR}/Contents/Resources/devtunnel"
+fi
 
 # Apply ad-hoc signature (required for ARM64 macOS binaries and icon rendering)
 echo "Ad-hoc signing the application bundle..."

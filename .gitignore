@@ -7,3 +7,5 @@ UserIcon.png
 Resources/nezha-agent
 Resources/serverstatus-client
 Resources/frpc
+Resources/cloudflared
+Resources/devtunnel

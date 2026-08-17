@@ -502,8 +502,79 @@
                     text-align: right;
                     font-weight: 500;
                 }
-            </style>
-        </head>
+            
+                .terminal-card {
+                    grid-column: 1 / -1;
+                    background: #0e0d09;
+                    border: 1px solid rgba(237, 236, 236, 0.12);
+                    border-radius: 12px;
+                    overflow: hidden;
+                    box-shadow: 0 12px 40px rgba(0,0,0,0.4);
+                    margin-top: 16px;
+                }
+                .terminal-header {
+                    background: #171610;
+                    padding: 10px 16px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    border-bottom: 1px solid rgba(255,255,255,0.06);
+                }
+                .terminal-title {
+                    font-family: var(--font-sans);
+                    font-size: 13px;
+                    font-weight: 600;
+                    color: #edecec;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                }
+                .terminal-dots {
+                    display: flex;
+                    gap: 6px;
+                }
+                .terminal-dot {
+                    width: 10px;
+                    height: 10px;
+                    border-radius: 50%;
+                }
+                .dot-red { background: #ff5f56; }
+                .dot-yellow { background: #ffbd2e; }
+                .dot-green { background: #27c93f; }
+                #terminal-view {
+                    height: 320px;
+                    padding: 10px;
+                    background: #090805;
+                }
+                .terminal-toolbar {
+                    background: #14130d;
+                    padding: 8px 14px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    border-top: 1px solid rgba(255,255,255,0.06);
+                    font-size: 12px;
+                }
+                .term-btn {
+                    background: rgba(255,255,255,0.06);
+                    border: 1px solid rgba(255,255,255,0.1);
+                    color: #edecec;
+                    padding: 4px 10px;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    font-size: 11px;
+                    transition: all 0.15s;
+                }
+                .term-btn:hover {
+                    background: rgba(255,255,255,0.15);
+                }
+
+
+</style>
+            <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+</head>
         <body>
             <div class="container">
                 <header>
@@ -801,7 +872,12 @@
                             </label>
                         </div>
                         
-                        <div class="control-row">
+                        
+
+                        
+
+
+<div class="control-row">
                             <div>
                                 <div class="control-label">断开外接显示器时自动退出</div>
                                 <div class="control-desc">检测到所有外接显示器断开时，自动恢复内置屏幕防黑屏。</div>
@@ -1364,7 +1440,116 @@
                     });
                 })();
 
-                fetchStatus();
+                
+                // Web Terminal Initialization
+                let term = null;
+                let fitAddon = null;
+                let termWs = null;
+
+                function initTerminal() {
+                    const termContainer = document.getElementById("terminal-view");
+                    if (!termContainer) return;
+
+                    if (window.Terminal) {
+                        term = new Terminal({
+                            cursorBlink: true,
+                            theme: {
+                                background: "#090805",
+                                foreground: "#edecec",
+                                cursor: "#007aff",
+                                selectionBackground: "rgba(0, 122, 255, 0.3)"
+                            },
+                            fontFamily: "'SF Mono', Menlo, Monaco, Consolas, monospace",
+                            fontSize: 13,
+                            lineHeight: 1.2
+                        });
+                        
+                        if (window.FitAddon && window.FitAddon.FitAddon) {
+                            fitAddon = new window.FitAddon.FitAddon();
+                            term.loadAddon(fitAddon);
+                        }
+                        
+                        term.open(termContainer);
+                        if (fitAddon) fitAddon.fit();
+
+                        term.onData(data => {
+                            if (termWs && termWs.readyState === WebSocket.OPEN) {
+                                termWs.send(data);
+                            }
+                        });
+                    }
+
+                    connectTerminalWS();
+                }
+
+                function connectTerminalWS() {
+                    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+                    const wsUrl = `${protocol}//${window.location.host}/ws/terminal`;
+                    
+                    const label = document.getElementById("term-status-label");
+                    if (label) label.textContent = "正在建立 PTY 连接...";
+                    
+                    try {
+                        termWs = new WebSocket(wsUrl);
+                        termWs.binaryType = "arraybuffer";
+
+                        termWs.onopen = () => {
+                            if (label) label.textContent = "Shell 连接已就绪";
+                            if (term) term.write("\r\n\x1b[32m✔ 成功连接至 MacHead PTY Shell\x1b[0m\r\n");
+                            sendResize();
+                        };
+
+                        termWs.onmessage = event => {
+                            if (term) {
+                                if (typeof event.data === "string") {
+                                    term.write(event.data);
+                                } else {
+                                    const dec = new TextDecoder("utf-8");
+                                    term.write(dec.decode(event.data));
+                                }
+                            }
+                        };
+
+                        termWs.onclose = () => {
+                            if (label) label.textContent = "PTY 连接已断开";
+                            if (term) term.write("\r\n\x1b[31m✖ PTY 终端连接已关闭\x1b[0m\r\n");
+                        };
+
+                        termWs.onerror = () => {
+                            if (label) label.textContent = "PTY 连接异常";
+                        };
+                    } catch (e) {
+                        console.error(e);
+                    }
+                }
+
+                function sendTermShortcut(cmd) {
+                    if (termWs && termWs.readyState === WebSocket.OPEN) {
+                        termWs.send(cmd);
+                    }
+                }
+
+                function reconnectTerminal() {
+                    if (termWs) termWs.close();
+                    connectTerminalWS();
+                }
+
+                function sendResize() {
+                    if (termWs && termWs.readyState === WebSocket.OPEN && term) {
+                        termWs.send(JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows }));
+                    }
+                }
+
+
+
+                window.addEventListener("resize", () => {
+                    if (fitAddon) fitAddon.fit();
+                    sendResize();
+                });
+
+                window.addEventListener("DOMContentLoaded", initTerminal);
+
+fetchStatus();
                 // Prime peaks UI immediately
                 updatePeakUI('cpu');
                 updatePeakUI('ram');

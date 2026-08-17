@@ -17,6 +17,8 @@ public final class IntegrationManager: ObservableObject {
         ServerStatusService.shared.start()
         UptimeKumaService.shared.start()
         FrpService.shared.start()
+        CloudflareService.shared.start()
+        DevTunnelService.shared.start()
         startTemperatureAlertWatcher()
     }
     
@@ -26,6 +28,8 @@ public final class IntegrationManager: ObservableObject {
         ServerStatusService.shared.stop()
         UptimeKumaService.shared.stop()
         FrpService.shared.stop()
+        CloudflareService.shared.stop()
+        DevTunnelService.shared.stop()
         stopTemperatureAlertWatcher()
     }
     
@@ -36,6 +40,8 @@ public final class IntegrationManager: ObservableObject {
             ServerStatusService.shared.stop()
             UptimeKumaService.shared.stop()
             FrpService.shared.stop()
+        CloudflareService.shared.stop()
+        DevTunnelService.shared.stop()
             
             Thread.sleep(forTimeInterval: 0.2)
             
@@ -43,6 +49,8 @@ public final class IntegrationManager: ObservableObject {
             ServerStatusService.shared.start()
             UptimeKumaService.shared.start()
             FrpService.shared.start()
+        CloudflareService.shared.start()
+        DevTunnelService.shared.start()
             
             DispatchQueue.main.async {
                 self?.stopTemperatureAlertWatcher()
