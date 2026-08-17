@@ -2,23 +2,6 @@ import Foundation
 import Network
 import SystemConfiguration
 
-@_silgen_name("IOHIDEventSystemClientCreate")
-func IOHIDEventSystemClientCreate(_ allocator: CFAllocator?) -> AnyObject?
-
-@_silgen_name("IOHIDEventSystemClientSetMatching")
-func IOHIDEventSystemClientSetMatching(_ client: AnyObject, _ matching: CFDictionary) -> Int32
-
-@_silgen_name("IOHIDEventSystemClientCopyServices")
-func IOHIDEventSystemClientCopyServices(_ client: AnyObject) -> CFArray?
-
-@_silgen_name("IOHIDServiceClientCopyProperty")
-func IOHIDServiceClientCopyProperty(_ service: AnyObject, _ property: CFString) -> AnyObject?
-
-@_silgen_name("IOHIDServiceClientCopyEvent")
-func IOHIDServiceClientCopyEvent(_ service: AnyObject, _ eventType: UInt32, _ flags: UInt32, _ options: UInt32) -> AnyObject?
-
-@_silgen_name("IOHIDEventGetFloatValue")
-func IOHIDEventGetFloatValue(_ event: AnyObject, _ field: UInt32) -> Double
 
 
 final class WebServer {
@@ -437,7 +420,7 @@ final class WebServer {
         let ramStats = getMemoryStats()
         let ram = ramStats.total > 0 ? (ramStats.used / ramStats.total) * 100.0 : 0.0
         let gpu = getGPUUsage()
-        let cpuTemp = getCPUTemperature()
+        let cpuTemp = SMCManager.shared.currentTemperature
         let gpuMem = getGPUMemoryUsage()
         
         BatteryManager.shared.updateBatteryRegistryInfo()
@@ -510,44 +493,7 @@ final class WebServer {
         return address
     }
     
-    private func getCPUTemperature() -> Double {
-        guard let client = IOHIDEventSystemClientCreate(kCFAllocatorDefault) else {
-            return 0.0
-        }
-        
-        let matching: [String: Any] = [
-            "PrimaryUsagePage": 0xff00,
-            "PrimaryUsage": 0x05
-        ]
-        
-        _ = IOHIDEventSystemClientSetMatching(client, matching as CFDictionary)
-        
-        guard let services = IOHIDEventSystemClientCopyServices(client) as? [AnyObject] else {
-            return 0.0
-        }
-        
-        var cpuTemps: [Double] = []
-        
-        for service in services {
-            let name = IOHIDServiceClientCopyProperty(service, "Product" as CFString) as? String ?? ""
-            let nameLower = name.lowercased()
-            
-            if nameLower.contains("tdie") || nameLower.contains("cpu") || nameLower.contains("pacc") || nameLower.contains("eacc") {
-                if let event = IOHIDServiceClientCopyEvent(service, 15, 0, 0) {
-                    let temp = IOHIDEventGetFloatValue(event, 983040)
-                    if temp > 0.0 && temp < 150.0 {
-                        cpuTemps.append(temp)
-                    }
-                }
-            }
-        }
-        
-        if cpuTemps.isEmpty {
-            return BatteryManager.shared.batteryTemperature
-        }
-        
-        return cpuTemps.reduce(0, +) / Double(cpuTemps.count)
-    }
+
     
     private func getGPUMemoryUsage() -> (used: Double, allocated: Double) {
         let serviceMatching = IOServiceMatching("IOAccelerator")
@@ -615,12 +561,7 @@ final class WebServer {
         return (usedGB, totalGB)
     }
     
-    private func getMemoryUsage() -> Double {
-        let stats = getMemoryStats()
-        guard stats.total > 0 else { return 0.0 }
-        return (stats.used / stats.total) * 100.0
-    }
-    
+
     private func getGPUUsage() -> Double {
         let serviceMatching = IOServiceMatching("IOAccelerator")
         var iterator = io_iterator_t()

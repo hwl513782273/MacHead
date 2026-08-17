@@ -244,17 +244,6 @@ final class HeadlessModeController {
         }
     }
     
-    func unregisterDisplayCallback() {
-        guard isCallbackRegistered else { return }
-        let userInfo = Unmanaged.passUnretained(self).toOpaque()
-        let result = CGDisplayRemoveReconfigurationCallback(displayReconfigurationCallback, userInfo)
-        if result == .success {
-            isCallbackRegistered = false
-            NSLog("MacHead: 成功注销显示器变化回调")
-        } else {
-            NSLog("MacHead: 注销显示器变化回调失败: %d", result.rawValue)
-        }
-    }
     
     @objc private func systemDidWake() {
         // 唤醒后系统可能重新枚举显示器，再次确保内屏断开

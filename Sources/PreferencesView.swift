@@ -259,7 +259,6 @@ struct PreferencesView: View {
     }
 
     @State private var cloudflareEnabled = UserDefaults.standard.bool(forKey: "cloudflareEnabled")
-    @State private var cloudflareBinaryPath = UserDefaults.standard.string(forKey: "cloudflareBinaryPath") ?? ""
     @State private var cloudflareToken = UserDefaults.standard.string(forKey: "cloudflareToken") ?? ""
     @State private var cloudflareStatus: CloudflareStatus = CloudflareService.shared.currentStatus
     @State private var showCloudflareConfig = false

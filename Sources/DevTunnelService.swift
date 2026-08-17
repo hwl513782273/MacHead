@@ -74,7 +74,6 @@ public final class DevTunnelService {
     private var isServiceRunning = false
     private var outputPipe: Pipe?
     private var errorPipe: Pipe?
-    private var currentPortBeingHosted: String? = nil
     public private(set) var activePortUrls: [String: String] = [:]
     
     public private(set) var currentStatus: DevTunnelStatus = .stopped {
@@ -291,7 +290,6 @@ public final class DevTunnelService {
         }
         
         self.activePortUrls.removeAll()
-        self.currentPortBeingHosted = nil
         
         let mode = defaults.string(forKey: "devTunnelMode") ?? "login"
         let token = (defaults.string(forKey: "devTunnelToken") ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -539,7 +537,6 @@ public final class DevTunnelService {
         self.isServiceRunning = false
         self.currentStatus = .stopped
         self.activePortUrls.removeAll()
-        self.currentPortBeingHosted = nil
         
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             procToStop?.terminationHandler = nil

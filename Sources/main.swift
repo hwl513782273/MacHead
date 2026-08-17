@@ -6,7 +6,7 @@ if arguments.count > 1 {
     let arg = arguments[1]
     
     if arg == "--status" || arg == "-s" || arg == "status" {
-        let defaults = UserDefaults(suiteName: "com.waffle.MacHead") ?? UserDefaults.standard
+        let defaults = UserDefaults.standard
         defaults.synchronize()
         let isHeadless = defaults.bool(forKey: "HeadlessModeEnabled")
         

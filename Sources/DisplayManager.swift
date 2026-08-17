@@ -101,14 +101,4 @@ final class DisplayManager {
         }
     }
 
-    /// 禁用指定的显示器 ID (通过 SkyLight)
-    func disableDisplay(id: CGDirectDisplayID) {
-        guard let setMode = setMode else { return }
-        var configRef: CGDisplayConfigRef? = nil
-        if CGBeginDisplayConfiguration(&configRef) == .success {
-            let configureErr = setMode(configRef, id, false)
-            let completeErr = CGCompleteDisplayConfiguration(configRef, .permanently)
-            NSLog("MacHead: SkyLight 禁用显示屏 %d 结果 - 设定: %d, 提交: %d", id, configureErr, completeErr.rawValue)
-        }
-    }
 }

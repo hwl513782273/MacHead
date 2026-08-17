@@ -5,7 +5,6 @@ public final class IntegrationManager: ObservableObject {
     public static let shared = IntegrationManager()
     
     private var cancellables = Set<AnyCancellable>()
-    private var tempCheckTimer: Timer?
     
     private init() {
         setupSMCWatcher()
@@ -19,7 +18,6 @@ public final class IntegrationManager: ObservableObject {
         FrpService.shared.start()
         CloudflareService.shared.start()
         DevTunnelService.shared.start()
-        startTemperatureAlertWatcher()
     }
     
     public func stopAllServices() {
@@ -30,18 +28,17 @@ public final class IntegrationManager: ObservableObject {
         FrpService.shared.stop()
         CloudflareService.shared.stop()
         DevTunnelService.shared.stop()
-        stopTemperatureAlertWatcher()
     }
     
     public func reloadServices() {
         print("IntegrationManager: Config changed, reloading integrations...")
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+        DispatchQueue.global(qos: .userInitiated).async {
             NezhaAgentService.shared.stop()
             ServerStatusService.shared.stop()
             UptimeKumaService.shared.stop()
             FrpService.shared.stop()
-        CloudflareService.shared.stop()
-        DevTunnelService.shared.stop()
+            CloudflareService.shared.stop()
+            DevTunnelService.shared.stop()
             
             Thread.sleep(forTimeInterval: 0.2)
             
@@ -49,13 +46,8 @@ public final class IntegrationManager: ObservableObject {
             ServerStatusService.shared.start()
             UptimeKumaService.shared.start()
             FrpService.shared.start()
-        CloudflareService.shared.start()
-        DevTunnelService.shared.start()
-            
-            DispatchQueue.main.async {
-                self?.stopTemperatureAlertWatcher()
-                self?.startTemperatureAlertWatcher()
-            }
+            CloudflareService.shared.start()
+            DevTunnelService.shared.start()
         }
     }
     
@@ -67,18 +59,6 @@ public final class IntegrationManager: ObservableObject {
                 self?.evaluateTemperature(temp)
             }
             .store(in: &cancellables)
-    }
-    
-    private func startTemperatureAlertWatcher() {
-        tempCheckTimer?.invalidate()
-        tempCheckTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [weak self] _ in
-            self?.evaluateTemperature(SMCManager.shared.currentTemperature)
-        }
-    }
-    
-    private func stopTemperatureAlertWatcher() {
-        tempCheckTimer?.invalidate()
-        tempCheckTimer = nil
     }
     
     private func evaluateTemperature(_ temp: Double) {

@@ -357,16 +357,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     @objc private func quitApp() {
-        // Stop all integrations
-        IntegrationManager.shared.stopAllServices()
-        
-        // Stop Web Server
-        WebServer.shared.stop()
-        
-        // Safety fallback: restore built-in screen when quitting
-        if controller.isHeadlessModeEnabled {
-            controller.disableHeadlessMode()
-        }
         NSApp.terminate(nil)
     }
 }

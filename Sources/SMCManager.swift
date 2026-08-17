@@ -1,6 +1,25 @@
 import Foundation
 import IOKit
 
+@_silgen_name("IOHIDEventSystemClientCreate")
+private func IOHIDEventSystemClientCreate(_ allocator: CFAllocator?) -> AnyObject?
+
+@_silgen_name("IOHIDEventSystemClientSetMatching")
+private func IOHIDEventSystemClientSetMatching(_ client: AnyObject, _ matching: CFDictionary) -> Int32
+
+@_silgen_name("IOHIDEventSystemClientCopyServices")
+private func IOHIDEventSystemClientCopyServices(_ client: AnyObject) -> CFArray?
+
+@_silgen_name("IOHIDServiceClientCopyProperty")
+private func IOHIDServiceClientCopyProperty(_ service: AnyObject, _ property: CFString) -> AnyObject?
+
+@_silgen_name("IOHIDServiceClientCopyEvent")
+private func IOHIDServiceClientCopyEvent(_ service: AnyObject, _ eventType: UInt32, _ flags: UInt32, _ options: UInt32) -> AnyObject?
+
+@_silgen_name("IOHIDEventGetFloatValue")
+private func IOHIDEventGetFloatValue(_ event: AnyObject, _ field: UInt32) -> Double
+
+
 public final class SMCManager: ObservableObject {
     public static let shared = SMCManager()
     
