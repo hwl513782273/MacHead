@@ -68,7 +68,27 @@ jobs:
             "${TEMP_DIR}/frp_${FRP_RAW_VER}_darwin_amd64/frpc" \
             "${TEMP_DIR}/frp_${FRP_RAW_VER}_darwin_arm64/frpc" \
             -output Resources/frpc
-          
+
+          echo "Determining latest cloudflared version..."
+          CFD_VER=$(curl -sI https://github.com/cloudflare/cloudflared/releases/latest | grep -i location | awk -F'/' '{print $NF}' | tr -d '\r\n')
+          echo "Latest cloudflared Version: ${CFD_VER}"
+
+          curl -L -o "${TEMP_DIR}/cloudflared_amd64.tgz" "https://github.com/cloudflare/cloudflared/releases/download/${CFD_VER}/cloudflared-darwin-amd64.tgz"
+          curl -L -o "${TEMP_DIR}/cloudflared_arm64.tgz" "https://github.com/cloudflare/cloudflared/releases/download/${CFD_VER}/cloudflared-darwin-arm64.tgz"
+
+          # 两个压缩包内层文件同名，必须分目录解压后再合并
+          mkdir -p "${TEMP_DIR}/cfd_amd64" "${TEMP_DIR}/cfd_arm64"
+          tar -xzf "${TEMP_DIR}/cloudflared_amd64.tgz" -C "${TEMP_DIR}/cfd_amd64"
+          tar -xzf "${TEMP_DIR}/cloudflared_arm64.tgz" -C "${TEMP_DIR}/cfd_arm64"
+
+          lipo -create \
+            "${TEMP_DIR}/cfd_amd64/cloudflared" \
+            "${TEMP_DIR}/cfd_arm64/cloudflared" \
+            -output Resources/cloudflared
+
+          # devtunnel 为微软专有 EULA 组件，禁止捆绑再分发，不在此下载；
+          # 用户可在 App 内通过一键安装从微软官方获取
+
           rm -rf "${TEMP_DIR}"
           echo "Successfully prepared latest universal binaries!"
 

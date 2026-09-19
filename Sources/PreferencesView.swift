@@ -12,33 +12,37 @@ enum PreferenceTab: String, CaseIterable, Identifiable {
     case general
     case hardware
     case integrations
+    case tunneling
     case status
-    
+
     var id: String { self.rawValue }
-    
+
     var title: String {
         switch self {
         case .general: return "常规设置"
         case .hardware: return "硬件与电源"
-        case .integrations: return "集成与通知"
+        case .integrations: return "监控与通知"
+        case .tunneling: return "内网穿透"
         case .status: return "显示器与状态"
         }
     }
-    
+
     var iconName: String {
         switch self {
         case .general: return "gearshape.fill"
         case .hardware: return "cpu"
-        case .integrations: return "network"
+        case .integrations: return "chart.line.uptrend.xyaxis"
+        case .tunneling: return "arrow.left.arrow.right"
         case .status: return "display"
         }
     }
-    
+
     var iconColor: Color {
         switch self {
         case .general: return .gray // Metallic grey to match native General tab, prevents blending when row is highlighted
         case .hardware: return .orange
         case .integrations: return .purple
+        case .tunneling: return .blue
         case .status: return .green
         }
     }
@@ -120,6 +124,7 @@ struct PreferencesView: View {
     @AppStorage("AutoExitHeadlessOnDisconnect") private var autoExitOnDisconnect = true
     @AppStorage("AutoRestoreHeadlessOnConnect") private var autoRestoreOnConnect = true
     @State private var launchAtLogin = LaunchAtLoginHelper.shared.isEnabled
+    @AppStorage(CLIToolInstaller.defaultsKey) private var cliToolEnabled = false
     @State private var connectedDisplays: [DisplayInfo] = []
     
     // Multi-select states for built-in keyboard & trackpad disabling conditions
@@ -237,6 +242,9 @@ struct PreferencesView: View {
     @State private var devTunnelTestResult: (success: Bool, message: String)? = nil
     @State private var devTunnelLoggedInUser: String? = DevTunnelService.shared.checkUserLoginStatus()
     @State private var isDevTunnelLoggingIn = false
+    @State private var isDevTunnelInstalling = false
+    @State private var devTunnelBinaryPath: String? = DevTunnelService.shared.findBinaryPath()
+    @State private var devTunnelInstallError: String? = nil
     @State private var devTunnelQuota: DevTunnelQuotaInfo? = nil
     @State private var isQueryingLimits = false
 
@@ -401,13 +409,28 @@ struct PreferencesView: View {
                                     .toggleStyle(.switch)
                                     .labelsHidden()
                                 }
-                                
+
                                 Divider().padding(.horizontal, 16)
-                                
+
                                 SettingsRow("启动时自动进入无头模式") {
                                     Toggle("", isOn: $autoEnableOnLaunch)
                                         .toggleStyle(.switch)
                                         .labelsHidden()
+                                }
+
+                                Divider().padding(.horizontal, 16)
+
+                                SettingsRow("启用 machead 命令行工具") {
+                                    Toggle("", isOn: $cliToolEnabled)
+                                        .toggleStyle(.switch)
+                                        .labelsHidden()
+                                        .onChange(of: cliToolEnabled) { newValue in
+                                            if newValue {
+                                                CLIToolInstaller.install()
+                                            } else {
+                                                CLIToolInstaller.remove()
+                                            }
+                                        }
                                 }
                             }
                             
@@ -718,6 +741,32 @@ struct PreferencesView: View {
                             
                             
                             
+                            SettingsCard(title: "Uptime Kuma 心跳打卡") {
+                                SettingsRow("启用 Uptime Kuma 推送") {
+                                    HStack(spacing: 12) {
+                                        Toggle("", isOn: Binding(
+                                            get: { self.kumaEnabled },
+                                            set: { newValue in
+                                                self.kumaEnabled = newValue
+                                                UserDefaults.standard.set(newValue, forKey: "kumaEnabled")
+                                                if newValue {
+                                                    UptimeKumaService.shared.start()
+                                                } else {
+                                                    UptimeKumaService.shared.stop()
+                                                }
+                                            }
+                                        ))
+                                        .toggleStyle(.switch)
+                                        .labelsHidden()
+
+                                        Button("设定...") {
+                                            self.showKumaConfig = true
+                                        }
+                                    }
+                                }
+                            }
+
+                        case .tunneling:
                             SettingsCard(title: "Microsoft Dev Tunnels 穿透服务") {
                                 SettingsRow("启用 Dev Tunnels (微软中继)") {
                                     HStack(spacing: 10) {
@@ -947,35 +996,8 @@ struct PreferencesView: View {
                                     }
                                 }
                             }
-                            
-                            SettingsCard(title: "Uptime Kuma 心跳打卡") {
-                                SettingsRow("启用 Uptime Kuma 推送") {
-                                    HStack(spacing: 12) {
-                                        Toggle("", isOn: Binding(
-                                            get: { self.kumaEnabled },
-                                            set: { newValue in
-                                                self.kumaEnabled = newValue
-                                                UserDefaults.standard.set(newValue, forKey: "kumaEnabled")
-                                                if newValue {
-                                                    UptimeKumaService.shared.start()
-                                                } else {
-                                                    UptimeKumaService.shared.stop()
-                                                }
-                                            }
-                                        ))
-                                        .toggleStyle(.switch)
-                                        .labelsHidden()
-                                        
-                                        Button("设定...") {
-                                            self.showKumaConfig = true
-                                        }
-                                    }
-                                }
-                            }
-                            
-                        case .status:
-                            
 
+                        case .status:
 
                             SettingsCard(title: "显示器与 Headless 守护策略") {
                                 SettingsRow("断开全部外屏时自动恢复内屏") {
@@ -1605,7 +1627,73 @@ struct PreferencesView: View {
                 Text("微软官方提供的安全跨网穿透隧道。通过 Azure Relay 边缘网络建立公网访问，支持自动端口多路复用与 GitHub 身份鉴权。")
                     .font(.caption)
                     .foregroundColor(.secondary)
-                
+
+                // CLI Component Status Card
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("devtunnel CLI 组件")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+
+                    if let binaryPath = devTunnelBinaryPath {
+                        HStack {
+                            Image(systemName: "checkmark.seal.fill")
+                                .foregroundColor(.green)
+                            Text("已就绪")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text(binaryPath)
+                                .font(.system(.caption2, design: .monospaced))
+                                .foregroundColor(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                            Spacer()
+                        }
+                    } else {
+                        HStack {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundColor(.orange)
+                            Text("未检测到 devtunnel CLI。该组件不随 App 内置，点击右侧按钮从微软官方下载安装。")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            Button(action: {
+                                self.isDevTunnelInstalling = true
+                                DevTunnelService.shared.installBinary { result in
+                                    self.isDevTunnelInstalling = false
+                                    switch result {
+                                    case .success(let path):
+                                        self.devTunnelBinaryPath = path
+                                    case .failure(let error):
+                                        self.devTunnelInstallError = error.localizedDescription
+                                    }
+                                }
+                            }) {
+                                HStack(spacing: 4) {
+                                    if isDevTunnelInstalling {
+                                        ProgressView().controlSize(.small)
+                                    }
+                                    Text(isDevTunnelInstalling ? "安装中..." : "一键安装")
+                                }
+                            }
+                            .controlSize(.small)
+                            .disabled(isDevTunnelInstalling)
+                        }
+
+                        if let installError = devTunnelInstallError {
+                            Text("安装失败: \(installError)")
+                                .font(.caption2)
+                                .foregroundColor(.red)
+                        }
+
+                        Text("也可自行安装后重启 App（如 brew install --cask devtunnel），MacHead 会自动识别 PATH 中的命令。")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .padding(8)
+                .background(Color.primary.opacity(0.04))
+                .cornerRadius(6)
+
                 // Account Login Status Card
                 VStack(alignment: .leading, spacing: 6) {
                     Text("微软 / GitHub 账号鉴权")

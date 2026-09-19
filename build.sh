@@ -97,6 +97,8 @@ if [ -f "Resources/cloudflared" ]; then
   cp Resources/cloudflared "${APP_DIR}/Contents/Resources/cloudflared"
   chmod +x "${APP_DIR}/Contents/Resources/cloudflared"
 fi
+# devtunnel 为微软专有 EULA 组件，禁止捆绑再分发：CI 不下载、仓库不入库。
+# 本地开发构建若存在该文件会顺带打包；正式分发由用户在 App 内一键安装获取。
 if [ -f "Resources/devtunnel" ]; then
   cp Resources/devtunnel "${APP_DIR}/Contents/Resources/devtunnel"
   chmod +x "${APP_DIR}/Contents/Resources/devtunnel"

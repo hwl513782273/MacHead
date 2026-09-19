@@ -113,13 +113,14 @@ public final class DevTunnelService {
         if let customPath = defaults.string(forKey: "devTunnelBinaryPath"), !customPath.isEmpty, FileManager.default.fileExists(atPath: customPath) {
             return customPath
         }
-        
+
         let binaryName = "devtunnel"
         let possiblePaths: [String?] = [
             Bundle.main.path(forResource: binaryName, ofType: nil),
             "/Applications/MacHead.app/Contents/Resources/\(binaryName)",
             "\(FileManager.default.currentDirectoryPath)/Resources/\(binaryName)",
             "\(Bundle.main.bundlePath)/Contents/Resources/\(binaryName)",
+            "\(Self.userInstallDirectory)/\(binaryName)",
             "/opt/homebrew/bin/\(binaryName)",
             "/usr/local/bin/\(binaryName)",
             "\(NSHomeDirectory())/bin/\(binaryName)",
@@ -143,7 +144,87 @@ public final class DevTunnelService {
         
         return nil
     }
-    
+
+    /// MacHead 在用户 Application Support 下的根目录（应用级用户组件的统一落点，卸载时整体删除）
+    public static var userInstallRoot: String {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        return appSupport.appendingPathComponent("MacHead", isDirectory: true).path
+    }
+
+    /// devtunnel CLI 的用户级安装目录（无需 sudo，删除 App 目录即完成卸载）
+    public static var userInstallDirectory: String {
+        return userInstallRoot + "/bin"
+    }
+
+    /// 从微软官方直链下载 devtunnel CLI 并安装到用户目录（应用内一键安装）
+    /// completion 成功携带安装路径，失败携带错误
+    public func installBinary(completion: @escaping (Result<String, Error>) -> Void) {
+        #if arch(arm64)
+        let downloadURLString = "https://aka.ms/TunnelsCliDownload/osx-arm64-zip"
+        #else
+        let downloadURLString = "https://aka.ms/TunnelsCliDownload/osx-x64-zip"
+        #endif
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            let fm = FileManager.default
+            let tempDir = fm.temporaryDirectory.appendingPathComponent("machead-devtunnel-\(UUID().uuidString)", isDirectory: true)
+
+            do {
+                // 1. 下载官方 ZIP 到临时目录
+                guard let url = URL(string: downloadURLString),
+                      let data = try? Data(contentsOf: url), !data.isEmpty else {
+                    throw NSError(domain: "DevTunnelInstall", code: -4,
+                                  userInfo: [NSLocalizedDescriptionKey: "下载失败，请检查网络连接"])
+                }
+                try fm.createDirectory(at: tempDir, withIntermediateDirectories: true)
+                let zipDest = tempDir.appendingPathComponent("devtunnel.zip")
+                try data.write(to: zipDest)
+
+                // 2. 使用系统自带 ditto 解压（保留可执行权限）
+                let p = Process()
+                p.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+                p.arguments = ["-x", "-k", zipDest.path, tempDir.path]
+                try p.run()
+                p.waitUntilExit()
+                guard p.terminationStatus == 0 else {
+                    throw NSError(domain: "DevTunnelInstall", code: -1,
+                                  userInfo: [NSLocalizedDescriptionKey: "解压官方压缩包失败"])
+                }
+
+                // 3. 校验 Mach-O 文件头，防止将错误页面误认为二进制
+                let extracted = tempDir.appendingPathComponent("devtunnel")
+                guard let handle = try? FileHandle(forReadingFrom: extracted),
+                      let header = try? handle.read(upToCount: 4), header.count == 4 else {
+                    throw NSError(domain: "DevTunnelInstall", code: -2,
+                                  userInfo: [NSLocalizedDescriptionKey: "下载内容无效，请稍后重试"])
+                }
+                try? handle.close()
+                let bytes = [UInt8](header)
+                // 64-bit Mach-O 魔数 (0xFEEDFACF, LE/BE)
+                guard bytes == [0xCF, 0xFA, 0xED, 0xFE] || bytes == [0xFE, 0xED, 0xFA, 0xCF] else {
+                    throw NSError(domain: "DevTunnelInstall", code: -3,
+                                  userInfo: [NSLocalizedDescriptionKey: "下载内容不是有效的 macOS 可执行文件"])
+                }
+
+                // 4. 安装到用户目录并赋予执行权限
+                try fm.createDirectory(atPath: Self.userInstallDirectory, withIntermediateDirectories: true)
+                let finalPath = URL(fileURLWithPath: Self.userInstallDirectory).appendingPathComponent("devtunnel")
+                if fm.fileExists(atPath: finalPath.path) {
+                    try fm.removeItem(at: finalPath)
+                }
+                try fm.moveItem(at: extracted, to: finalPath)
+                try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: finalPath.path)
+
+                try? fm.removeItem(at: tempDir)
+
+                DispatchQueue.main.async { completion(.success(finalPath.path)) }
+            } catch {
+                try? fm.removeItem(at: tempDir)
+                DispatchQueue.main.async { completion(.failure(error)) }
+            }
+        }
+    }
+
     public func checkUserLoginStatus() -> String? {
         guard let path = findBinaryPath() else { return nil }
         let p = Process()
