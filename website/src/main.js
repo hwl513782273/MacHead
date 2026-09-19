@@ -599,7 +599,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const feedContainer = document.getElementById('changelog-feed');
     if (feedContainer) {
-        const isHomepage = !window.location.pathname.includes('changelog.html');
+        const isHomepage = !window.location.pathname.includes('changelog');
         const itemsToDisplay = isHomepage ? CHANGELOG_DATA.slice(0, 2) : CHANGELOG_DATA;
 
         const html = itemsToDisplay.map(item => `
