@@ -42,4 +42,4 @@ git push origin v1.1.0
 ## 3. 流水线环境变量 (Secrets)
 若流水线报错或需要重构，请确保 GitHub 仓库的 Settings 中已正确配置以下密钥：
 - `CLOUDFLARE_API_TOKEN`: 拥有 R2 桶读写编辑权限的永久 Cloudflare API 令牌。
-- `CLOUDFLARE_ACCOUNT_ID`: Cloudflare 账户 ID `***REMOVED***`。
+- `CLOUDFLARE_ACCOUNT_ID`: Cloudflare 账户 ID（在 Cloudflare 控制台首页右侧查看，勿写入库）。

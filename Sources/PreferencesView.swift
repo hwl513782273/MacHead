@@ -125,6 +125,7 @@ struct PreferencesView: View {
     @AppStorage("AutoRestoreHeadlessOnConnect") private var autoRestoreOnConnect = true
     @State private var launchAtLogin = LaunchAtLoginHelper.shared.isEnabled
     @AppStorage(CLIToolInstaller.defaultsKey) private var cliToolEnabled = false
+    @AppStorage("telemetryEnabled") private var telemetryEnabled = true
     @State private var connectedDisplays: [DisplayInfo] = []
     
     // Multi-select states for built-in keyboard & trackpad disabling conditions
@@ -432,6 +433,15 @@ struct PreferencesView: View {
                                             }
                                         }
                                 }
+
+                                Divider().padding(.horizontal, 16)
+
+                                SettingsRow("匿名使用统计") {
+                                    Toggle("", isOn: $telemetryEnabled)
+                                        .toggleStyle(.switch)
+                                        .labelsHidden()
+                                }
+                                .help("帮助我们改进 MacHead：仅发送随机匿名 ID、系统与应用版本及功能开关状态，不含任何个人信息，可随时关闭。")
                             }
                             
                             SettingsCard(title: "局域网远程控制") {

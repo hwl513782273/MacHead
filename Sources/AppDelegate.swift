@@ -58,7 +58,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             "telegramBotToken": "",
             "telegramChatId": "",
             "overheatAlertEnabled": false,
-            "overheatThreshold": 85.0
+            "overheatThreshold": 85.0,
+            "telemetryEnabled": true
         ])
         
         // Generate random default WebServerPassword if not present

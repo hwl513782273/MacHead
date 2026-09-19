@@ -69,8 +69,14 @@ final class TelemetryManager {
         return payload
     }
     
-    /// 异步发送打点事件
+    /// 异步发送打点事件（用户可在偏好设置中关闭匿名使用统计）
     func track(event: String, extraInfo: [String: Any] = [:]) {
+        // 未注册过该键的存量用户保持默认开启；显式关闭后不再发送任何事件
+        if UserDefaults.standard.object(forKey: "telemetryEnabled") == nil {
+            UserDefaults.standard.register(defaults: ["telemetryEnabled": true])
+        }
+        guard UserDefaults.standard.bool(forKey: "telemetryEnabled") else { return }
+
         let payload = buildPayload(event: event, extraInfo: extraInfo)
         
         guard let jsonData = try? JSONSerialization.data(withJSONObject: payload) else {
