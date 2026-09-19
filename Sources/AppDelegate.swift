@@ -185,10 +185,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onQuitApp: { [weak self] in
                 self?.popover?.performClose(nil)
                 self?.quitApp()
-            },
-            onUninstall: { [weak self] in
-                self?.popover?.performClose(nil)
-                UninstallService.shared.runUninstallFlow()
             }
         )
         
@@ -220,14 +216,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         
         menu.addItem(NSMenuItem.separator())
 
-        let uninstallItem = NSMenuItem(
-            title: "卸载 MacHead...",
-            action: #selector(uninstallApp),
-            keyEquivalent: ""
-        )
-        uninstallItem.target = self
-        menu.addItem(uninstallItem)
-
         let quitItem = NSMenuItem(
             title: "退出 MacHead",
             action: #selector(quitApp),
@@ -248,10 +236,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    @objc private func uninstallApp() {
-        UninstallService.shared.runUninstallFlow()
-    }
-    
     @objc func openPreferences() {
         if preferencesWindow == nil {
             let view = PreferencesView()
@@ -303,11 +287,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         WebServer.shared.stop()
         if controller.isHeadlessModeEnabled {
             controller.disableHeadlessMode()
-        }
-
-        // 卸载流程的收尾：本进程最后一个操作，清除全部偏好设置域（含匿名 ID 与用户 Token）
-        if UninstallService.shared.isUninstalling, let bundleID = Bundle.main.bundleIdentifier {
-            UserDefaults.standard.removePersistentDomain(forName: bundleID)
         }
     }
     
