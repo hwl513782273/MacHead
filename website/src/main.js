@@ -517,6 +517,17 @@ document.addEventListener('DOMContentLoaded', () => {
     // 7. Landing Page Changelog Minimalist Feed Renderer (No Download Buttons)
     const CHANGELOG_DATA = [
         {
+            version: "0.1.20",
+            date: "2026-09-19",
+            title: "内网穿透独立分区与遥测开关",
+            bullets: [
+                "内网穿透独立分区：Dev Tunnels / Cloudflare Tunnel / FRP 三套方案统一管理。",
+                "devtunnel 支持应用内一键安装，无需手动下载配置。",
+                "新增「匿名使用统计」开关，可一键关闭遥测。",
+                "若干稳定性与体验优化。"
+            ]
+        },
+        {
             version: "0.1.19",
             date: "2026-08-09",
             title: "原生集成 FRP 内网穿透与后台线程重载",
