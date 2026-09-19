@@ -114,8 +114,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             suspensionBehavior: .deliverImmediately
         )
         
-        // Auto-install CLI helper symlink
-        setupCLISymlink()
+        // CLI 软链接为 opt-in 组件：仅在偏好设置中开启后维护，默认零包外写入；
+        // 异步执行，提权弹窗不得阻塞启动流程
+        DispatchQueue.main.async { CLIToolInstaller.setupIfEnabled() }
         
         // Auto-reconnect if headless mode was previously enabled and autoEnableOnLaunch is true
         let autoEnable = UserDefaults.standard.bool(forKey: "AutoEnableHeadlessOnLaunch")
@@ -131,75 +132,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
             UpdateManager.shared.checkForUpdates(silent: true)
             TelemetryManager.shared.track(event: "app_heartbeat")
-        }
-    }
-    
-    private func setupCLISymlink() {
-        let fileManager = FileManager.default
-        let symlinkPath = "/usr/local/bin/machead"
-        let executablePath = "/Applications/MacHead.app/Contents/MacOS/MacHead"
-        
-        // Ensure the source executable exists (so we only symlink if we are actually installed in /Applications)
-        guard fileManager.fileExists(atPath: executablePath) else {
-            print("CLI Auto-Link: Source executable not found at \(executablePath). Skipping auto-link.")
-            return
-        }
-        
-        // Check if symlink already exists and points to the correct location
-        if fileManager.fileExists(atPath: symlinkPath) {
-            if let destination = try? fileManager.destinationOfSymbolicLink(atPath: symlinkPath), destination == executablePath {
-                return // Already set up correctly
-            }
-        }
-        
-        // Try creating directory and link directly (in case /usr/local/bin is user-writeable)
-        let binDir = "/usr/local/bin"
-        var needsElevation = false
-        if !fileManager.fileExists(atPath: binDir) {
-            do {
-                try fileManager.createDirectory(atPath: binDir, withIntermediateDirectories: true, attributes: nil)
-            } catch {
-                needsElevation = true
-            }
-        }
-        
-        if !needsElevation {
-            if fileManager.fileExists(atPath: symlinkPath) {
-                try? fileManager.removeItem(atPath: symlinkPath)
-            }
-            do {
-                try fileManager.createSymbolicLink(atPath: symlinkPath, withDestinationPath: executablePath)
-                print("CLI Auto-Link: Created successfully under user privileges.")
-                return
-            } catch {
-                needsElevation = true
-            }
-        }
-        
-        if needsElevation {
-            // Prompt the user on main thread to grant permission for CLI link installation
-            DispatchQueue.main.async {
-                let alert = NSAlert()
-                alert.messageText = "安装 MacHead 命令行工具"
-                alert.informativeText = "MacHead 希望在 /usr/local/bin/machead 创建命令行工具的软链接。启用后，您可以在终端中运行 'machead' 直接管控设备守护程序。"
-                alert.alertStyle = .informational
-                alert.addButton(withTitle: "立即安装 (需密码或Touch ID)")
-                alert.addButton(withTitle: "稍后")
-                
-                let response = alert.runModal()
-                if response == .alertFirstButtonReturn {
-                    let script = "do shell script \"mkdir -p /usr/local/bin && ln -sf /Applications/MacHead.app/Contents/MacOS/MacHead /usr/local/bin/machead\" with administrator privileges"
-                    if let appleScript = NSAppleScript(source: script) {
-                        var error: NSDictionary?
-                        appleScript.executeAndReturnError(&error)
-                        if let err = error {
-                            print("CLI Auto-Link: Elevation failed: \(err)")
-                        } else {
-                            print("CLI Auto-Link: Successfully created symlink via elevation.")
-                        }
-                    }
-                }
-            }
         }
     }
     
@@ -252,6 +184,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onQuitApp: { [weak self] in
                 self?.popover?.performClose(nil)
                 self?.quitApp()
+            },
+            onUninstall: { [weak self] in
+                self?.popover?.performClose(nil)
+                UninstallService.shared.runUninstallFlow()
             }
         )
         
@@ -282,13 +218,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(preferencesItem)
         
         menu.addItem(NSMenuItem.separator())
-        
+
+        let uninstallItem = NSMenuItem(
+            title: "卸载 MacHead...",
+            action: #selector(uninstallApp),
+            keyEquivalent: ""
+        )
+        uninstallItem.target = self
+        menu.addItem(uninstallItem)
+
         let quitItem = NSMenuItem(
             title: "退出 MacHead",
             action: #selector(quitApp),
             keyEquivalent: "q"
         )
         quitItem.target = self
+        menu.addItem(quitItem)
         statusItem.menu = menu
         statusItem.button?.performClick(nil)
         statusItem.menu = nil
@@ -300,6 +245,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             controller.enableHeadlessMode()
         }
+    }
+
+    @objc private func uninstallApp() {
+        UninstallService.shared.runUninstallFlow()
     }
     
     @objc func openPreferences() {
@@ -353,6 +302,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         WebServer.shared.stop()
         if controller.isHeadlessModeEnabled {
             controller.disableHeadlessMode()
+        }
+
+        // 卸载流程的收尾：本进程最后一个操作，清除全部偏好设置域（含匿名 ID 与用户 Token）
+        if UninstallService.shared.isUninstalling, let bundleID = Bundle.main.bundleIdentifier {
+            UserDefaults.standard.removePersistentDomain(forName: bundleID)
         }
     }
     

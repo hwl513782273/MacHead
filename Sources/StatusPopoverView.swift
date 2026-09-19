@@ -11,6 +11,7 @@ struct StatusPopoverView: View {
     
     var onOpenPreferences: () -> Void
     var onQuitApp: () -> Void
+    var onUninstall: () -> Void
     
     var body: some View {
         VStack(spacing: 12) {
@@ -198,7 +199,18 @@ struct StatusPopoverView: View {
                 .buttonStyle(PlainButtonStyle())
                 
                 Spacer()
-                
+
+                Button(action: onUninstall) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "trash")
+                        Text("卸载")
+                    }
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.orange)
+                }
+                .buttonStyle(PlainButtonStyle())
+                .help("卸载 MacHead 并清理所有集成组件")
+
                 Button(action: onQuitApp) {
                     HStack(spacing: 4) {
                         Image(systemName: "power")
