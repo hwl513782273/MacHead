@@ -1,0 +1,4 @@
+# Cloudflare Pages 响应头覆盖规则
+# appcast.json 是 OTA 更新通道：不允许边缘缓存旧版本，始终回源协商（etag 命中时 304，成本不变）
+/appcast.json
+  Cache-Control: no-cache

@@ -37,7 +37,7 @@ echo "    发布说明："
 echo "${NOTES}" | sed 's/^/    /'
 
 # ── 1. 拉取第三方二进制并合并通用架构（同 release.yml）──
-echo "==> [1/5] 拉取最新 frp / nezha / ServerStatus / cloudflared ..."
+echo "==> [1/6] 拉取最新 frp / nezha / ServerStatus / cloudflared ..."
 TEMP_DIR="temp_binaries"
 trap 'rm -rf "${TEMP_DIR}"' EXIT
 mkdir -p Resources "${TEMP_DIR}"
@@ -85,12 +85,12 @@ lipo -create "${TEMP_DIR}/cfd_amd64/cloudflared" "${TEMP_DIR}/cfd_arm64/cloudfla
 # 用户可在 App 内通过一键安装从微软官方获取
 
 # ── 2. 构建通用二进制 App ──
-echo "==> [2/5] 编译 ${TAG} ..."
+echo "==> [2/6] 编译 ${TAG} ..."
 BUILD=$(python3 -c "import json; print(json.load(open('website/public/appcast.json')).get('build', 1) + 1)")
 ./build.sh "${VERSION}" "${BUILD}"
 
 # ── 3. 打包 DMG ──
-echo "==> [3/5] 打包 ${DMG_NAME} ..."
+echo "==> [3/6] 打包 ${DMG_NAME} ..."
 rm -rf dist-dmg "${DMG_NAME}"
 mkdir -p dist-dmg
 cp -R "MacHead.app" dist-dmg/
@@ -99,11 +99,11 @@ hdiutil create -fs HFS+ -srcfolder dist-dmg -volname "MacHead" "${DMG_NAME}" >/d
 rm -rf dist-dmg
 
 # ── 4. 上传 Cloudflare R2 ──
-echo "==> [4/5] 上传 R2 (headlessmac-releases) ..."
+echo "==> [4/6] 上传 R2 (headlessmac-releases) ..."
 npx wrangler r2 object put "headlessmac-releases/${DMG_NAME}" --file="${DMG_NAME}" --remote
 
 # ── 5. 更新 appcast.json（OTA 更新通道）──
-echo "==> [5/5] 更新 appcast.json ..."
+echo "==> [5/6] 更新 appcast.json ..."
 PUB_DATE=$(date +%Y-%m-%d)
 export TAG VERSION NOTES PUB_DATE BUILD
 python3 - <<'PY'
@@ -131,8 +131,12 @@ else
   echo "==> (未推送；稍后手动执行: git push origin main --tags)"
 fi
 
+# ── 6. 部署官网（appcast.json 随官网静态资源下发，Pages Git 集成失效时必须直传）──
+echo "==> [6/6] 部署官网 (发布 appcast) ..."
+(cd website && npm run build >/dev/null && npx wrangler pages deploy >/dev/null && echo "    官网已部署")
+
 echo ""
 echo "✅ 发布完成：${TAG} (build ${BUILD})"
 echo "   DMG: ${DMG_NAME} (已上传 R2，本地副本保留)"
-echo "   OTA: 用户端将在下次启动检查更新时收到新版本"
+echo "   OTA: appcast 已随官网发布，用户端下次检查更新即可收到"
 echo "   注：GitHub Release 页面未创建（Actions 受限），账号恢复后可补发"
