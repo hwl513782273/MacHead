@@ -4,7 +4,7 @@
         xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
   <url>
     <loc>https://headlessmac.com/</loc>
-    <lastmod>2026-08-04</lastmod>
+    <lastmod>2026-09-19</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
     <xhtml:link rel="alternate" hreflang="zh-CN" href="https://headlessmac.com/" />
@@ -20,5 +20,11 @@
       <image:title>MacHead Web Dashboard</image:title>
       <image:caption>MacHead LAN remote control dashboard with real-time CPU, RAM, GPU monitoring and system controls</image:caption>
     </image:image>
+  </url>
+  <url>
+    <loc>https://headlessmac.com/changelog.html</loc>
+    <lastmod>2026-09-19</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
   </url>
 </urlset>
