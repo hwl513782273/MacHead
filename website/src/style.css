@@ -172,9 +172,10 @@ p {
 .github-btn {
   background: rgba(255, 255, 255, 0.03);
   padding: 5px 12px;
-  border-radius: 4px;
+  border-radius: 999px;
   border: 1px solid var(--color-border);
   color: var(--color-text-main);
+  transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
 .github-btn:hover {
@@ -204,7 +205,7 @@ p {
   align-items: center;
   background: transparent;
   border: 1px solid var(--color-border);
-  border-radius: 4px;
+  border-radius: 8px;
   cursor: pointer;
 }
 
@@ -233,7 +234,7 @@ p {
   gap: 8px;
   font-family: var(--font-sans);
   font-weight: 500;
-  border-radius: 4px;
+  border-radius: 999px;
   text-decoration: none;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -298,7 +299,7 @@ p {
   background: rgba(255, 255, 255, 0.02);
   border: 1px solid var(--color-border);
   padding: 4px 12px;
-  border-radius: 4px;
+  border-radius: 999px;
   margin-bottom: 20px;
 }
 
@@ -347,7 +348,7 @@ p {
   background: var(--color-bg-input);
   border: 1px solid var(--color-border);
   padding: 10px 14px;
-  border-radius: 4px;
+  border-radius: 8px;
   width: 100%;
   max-width: 440px;
 }
@@ -430,7 +431,7 @@ p {
   right: 6%;
   width: 72%;
   height: auto;
-  border-radius: 6px;
+  border-radius: 8px;
   border: 1px solid rgba(0, 0, 0, 0.08);
   box-shadow: -15px 20px 40px rgba(0, 0, 0, 0.25);
   transform: rotateY(-12deg) rotateX(4deg) rotateZ(1deg);
@@ -445,7 +446,7 @@ p {
   left: 8%;
   width: 48%;
   height: auto;
-  border-radius: 8px;
+  border-radius: 10px;
   border: 1px solid rgba(38, 37, 30, 0.08);
   box-shadow: -20px 25px 45px rgba(38, 37, 30, 0.16), -2px 5px 15px rgba(38, 37, 30, 0.08);
   transform: translateZ(30px) rotateY(-8deg) rotateX(3deg) rotateZ(-1deg);
@@ -496,7 +497,7 @@ p {
 .bento-card {
   background: var(--color-bg-card);
   border: 1px solid var(--color-border);
-  border-radius: 6px;
+  border-radius: 12px;
   padding: 24px;
   transition: all 0.2s ease;
   display: flex;
@@ -508,6 +509,7 @@ p {
 .bento-card:hover {
   border-color: var(--color-border-hover);
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.04);
+  transform: translateY(-2px);
 }
 
 .bento-w2 {
@@ -554,7 +556,7 @@ p {
 .bento-icon-box {
   width: 36px;
   height: 36px;
-  border-radius: 4px;
+  border-radius: 8px;
   background: var(--color-bg-input);
   border: 1px solid var(--color-border);
   display: flex;
@@ -603,7 +605,7 @@ p {
   background: transparent;
   border: 1px solid transparent;
   padding: 8px 16px;
-  border-radius: 4px;
+  border-radius: 8px;
   color: var(--color-text-muted);
   font-family: var(--font-sans);
   font-weight: 500;
@@ -644,7 +646,7 @@ p {
 .terminal-window {
   background: #0b0a05;
   border: 1px solid rgba(237, 236, 236, 0.08);
-  border-radius: 6px;
+  border-radius: 10px;
   overflow: hidden;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
 }
@@ -744,7 +746,7 @@ p {
   background: rgba(255, 255, 255, 0.02);
   border: 1px solid rgba(237, 236, 236, 0.08);
   padding: 6px 12px;
-  border-radius: 4px;
+  border-radius: 999px;
   color: #edecec;
   font-family: var(--font-mono);
   font-size: 10.5px;
@@ -761,7 +763,7 @@ p {
 .web-mockup {
   background: var(--color-bg-input);
   border: 1px solid var(--color-border);
-  border-radius: 6px;
+  border-radius: 10px;
   overflow: hidden;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.1);
   transition: all 0.3s ease;
@@ -799,7 +801,7 @@ p {
 .web-mockup-address {
   background: rgba(0, 0, 0, 0.04);
   border: 1px solid var(--color-border);
-  border-radius: 4px;
+  border-radius: 999px;
   height: 24px;
   display: flex;
   align-items: center;
@@ -821,7 +823,7 @@ p {
 .web-dash-card {
   background: var(--color-bg-card);
   border: 1px solid var(--color-border);
-  border-radius: 4px;
+  border-radius: 8px;
   padding: 14px;
 }
 
@@ -917,9 +919,16 @@ input:checked + .slider-mini:before {
 .step-card {
   background: var(--color-bg-card);
   border: 1px solid var(--color-border);
-  border-radius: 6px;
+  border-radius: 12px;
   padding: 24px;
   position: relative;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.step-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--color-border-hover);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.04);
 }
 
 .step-num {
@@ -952,7 +961,7 @@ input:checked + .slider-mini:before {
 .code-block-container {
   background: var(--color-bg-input);
   border: 1px solid var(--color-border);
-  border-radius: 4px;
+  border-radius: 8px;
   padding: 8px 12px;
   overflow-x: auto;
 }
@@ -972,10 +981,16 @@ input:checked + .slider-mini:before {
 .cta-card {
   background: var(--color-bg-card);
   border: 1px solid var(--color-border);
-  border-radius: 6px;
+  border-radius: 12px;
   padding: 64px 32px;
   text-align: center;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.03);
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.cta-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--color-border-hover);
 }
 
 .cta-title {
@@ -1267,7 +1282,7 @@ input:checked + .slider-mini:before {
     justify-content: center;
     margin-top: 12px;
     padding: 11px 12px;
-    border-radius: 4px;
+    border-radius: 999px;
   }
 }
 
@@ -1419,7 +1434,7 @@ input:checked + .slider-mini:before {
 }
 .web-alert {
   padding: 8px 12px;
-  border-radius: 4px;
+  border-radius: 8px;
   font-size: 11px;
   display: flex;
   align-items: center;
