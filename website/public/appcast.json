@@ -1,7 +1,7 @@
 {
-  "version": "0.1.20",
-  "build": 24,
-  "pubDate": "2026-09-19",
-  "url": "https://releases.headlessmac.com/MacHead-v0.1.20-macos-universal.dmg",
-  "releaseNotes": "1. 内网穿透独立分区：Dev Tunnels / Cloudflare Tunnel / FRP 统一管理，devtunnel 支持应用内一键安装；2. 新增「匿名使用统计」开关，可一键关闭遥测；3. 若干稳定性与体验优化。"
+  "version": "0.1.21",
+  "build": 25,
+  "pubDate": "2026-09-21",
+  "url": "https://releases.headlessmac.com/MacHead-v0.1.21-macos-universal.dmg",
+  "releaseNotes": "1. 修复断开外屏后内屏无法自动恢复的问题，系统虚拟屏不再被误判为外接显示器；2. 恢复可靠性增强：显示器配置完成后统一决策、失败自动重试、重复操作幂等跳过；3. 偏好设置与菜单栏的外接显示器列表口径统一。"
 }
