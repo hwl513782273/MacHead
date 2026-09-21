@@ -2531,13 +2531,12 @@ struct PreferencesView: View {
     }
     
     private func updateConnectedDisplays() {
-        var count: UInt32 = 0
-        guard CGGetOnlineDisplayList(0, nil, &count) == .success else { return }
-        var displays = [CGDirectDisplayID](repeating: 0, count: Int(count))
-        guard CGGetOnlineDisplayList(count, &displays, &count) == .success else { return }
-        
-        self.connectedDisplays = displays.map { id in
+        guard let displays = DisplayManager.shared.onlineDisplayIDs() else { return }
+
+        self.connectedDisplays = displays.compactMap { id in
             let isBuiltIn = CGDisplayIsBuiltin(id) != 0
+            // 虚拟/软件显示屏（unkn virt 等）不作为外接显示器列出，与菜单栏计数口径一致
+            if !isBuiltIn && DisplayManager.isVirtualDisplay(id) { return nil }
             let vendorID = CGDisplayVendorNumber(id)
             let isApple = vendorID == 0x05AC // Apple's Vendor ID
             let name: String

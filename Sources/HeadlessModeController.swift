@@ -16,53 +16,52 @@ private func displayReconfigurationCallback(
     guard let userInfo = userInfo else { return }
     let controller = Unmanaged<HeadlessModeController>.fromOpaque(userInfo).takeUnretainedValue()
     
-    // 1. 如果是开始配置且显示器是内置的，且我们仍处于无头模式，则再次断开
-    if flags.contains(.beginConfigurationFlag),
-       CGDisplayIsBuiltin(displayID) != 0,
-       controller.isHeadlessModeEnabled {
-        NSLog("MacHead: 检测到内置显示屏重新上线，尝试在 0.5 秒后断开...")
-        // 稍等一下让系统完成配置，再切断
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            if controller.isHeadlessModeEnabled {
-                DisplayManager.shared.disconnectBuiltIn()
-            }
-        }
+    // 忽略配置起始阶段（kCGDisplayBeginConfigurationFlag）
+    // 官方 CoreGraphics 规范明确指出：BeginConfiguration 仅代表事务开始，硬件拓扑与驱动状态处于未决中间态，
+    // 不得在此期间调用显示配置修改接口；所有插拔、恢复与无头模式维持逻辑均在配置完成后（非 beginConfigurationFlag）统一处理。
+    guard !flags.contains(.beginConfigurationFlag) else {
+        return
     }
     
-    // 2. 配置完成且监测已启动，执行显示器变动时的自动退出/恢复逻辑
-    if !flags.contains(.beginConfigurationFlag) && controller.isDisplayMonitoringStarted {
-        let currentExternals = controller.currentExternalDisplays()
-        let previousExternals = controller.activeExternalDisplays
-        controller.activeExternalDisplays = currentExternals
-        
-        let externalCount = currentExternals.count
-        NSLog("MacHead: 显示配置变更完成。之前外接: %@, 当前外接: %@, 数量: %d", previousExternals.description, currentExternals.description, externalCount)
-        
-        if externalCount == 0 {
-            if controller.isHeadlessModeEnabled {
-                let autoExit = UserDefaults.standard.bool(forKey: "AutoExitHeadlessOnDisconnect")
-                if autoExit {
-                    NSLog("MacHead: 检测到所有外接显示器已断开，启动安全防黑屏恢复...")
-                    DispatchQueue.main.async {
-                        controller.triggerSafeRecovery()
-                    }
-                }
-            }
-        } else {
-            if !controller.isHeadlessModeEnabled {
-                // 只有当有新的外接显示器接入时，才自动恢复 Headless 模式
-                let newDisplays = currentExternals.subtracting(previousExternals)
-                if !newDisplays.isEmpty {
-                    let autoRestore = UserDefaults.standard.bool(forKey: "AutoRestoreHeadlessOnConnect")
-                    if autoRestore {
-                        NSLog("MacHead: 检测到新外接显示器已接入: %@，自动恢复 Headless 模式...", newDisplays.description)
-                        DispatchQueue.main.async {
-                            controller.enableHeadlessMode()
-                        }
-                    }
-                }
+    guard controller.isDisplayMonitoringStarted else { return }
+
+    let currentExternals = controller.currentExternalDisplays()
+    let previousExternals = controller.activeExternalDisplays
+    controller.activeExternalDisplays = currentExternals
+
+    NSLog("MacHead: 显示配置变更完成。之前外接: %@, 当前外接: %@, 数量: %d, 无头模式: %d",
+          previousExternals.description, currentExternals.description, currentExternals.count, controller.isHeadlessModeEnabled ? 1 : 0)
+
+    // 所有外接显示器都已断开：按需安全恢复内屏
+    if currentExternals.isEmpty {
+        if controller.isHeadlessModeEnabled,
+           UserDefaults.standard.bool(forKey: "AutoExitHeadlessOnDisconnect") {
+            NSLog("MacHead: 检测到所有外接显示器已断开，直接退出无头模式！")
+            DispatchQueue.main.async {
+                controller.triggerSafeRecovery()
             }
         }
+        return
+    }
+
+    // 无头模式下内屏被系统意外点亮（插拔/唤醒）：延迟片刻让系统稳定后重新切断
+    if controller.isHeadlessModeEnabled {
+        if controller.isBuiltInOnline() {
+            NSLog("MacHead: 无头模式下检测到内屏处于在线状态，重新切断内屏以维持 Headless...")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                controller.maintainBuiltInDisconnect()
+            }
+        }
+        return
+    }
+
+    // 非无头模式：有新的外接显示器接入时，按需自动恢复 Headless
+    let newDisplays = currentExternals.subtracting(previousExternals)
+    guard !newDisplays.isEmpty,
+          UserDefaults.standard.bool(forKey: "AutoRestoreHeadlessOnConnect") else { return }
+    NSLog("MacHead: 检测到新外接显示器已接入: %@，自动恢复 Headless 模式...", newDisplays.description)
+    DispatchQueue.main.async {
+        controller.enableHeadlessMode()
     }
 }
 
@@ -77,27 +76,46 @@ final class HeadlessModeController {
     fileprivate(set) var activeExternalDisplays: Set<CGDirectDisplayID> = []
     
     // MARK: - Test Hooks
+    /// 测试模式：动作函数只记录 was*Called 标志位，不触碰真实显示器/麦克风/电源断言/遥测
+    var isTestMode = false
     var wasEnableHeadlessModeCalled = false
     var wasDisableHeadlessModeCalled = false
     var wasTriggerSafeRecoveryCalled = false
+    var wasMaintainDisconnectCalled = false
     var mockExternalDisplays: Set<CGDirectDisplayID>? = nil
+    /// nil = 读取真实在线状态；否则用该值替代（供测试模拟内屏被系统点亮）
+    var mockBuiltInOnline: Bool? = nil
     
     private init() {}
-    
+
+    /// 内置屏是否在线（测试模式可被 mockBuiltInOnline 覆盖）
+    func isBuiltInOnline() -> Bool {
+        mockBuiltInOnline ?? DisplayManager.shared.isBuiltInOnline
+    }
+
+    /// 维持无头：仅当无头模式生效且仍有外接屏时，重新切断被系统意外点亮的内屏。
+    /// 由显示器回调（0.3s 延迟）与 systemDidWake（0.5s 延迟）共用；0.3/0.5 秒的延迟
+    /// 是有意留出的系统稳定窗口，因此这里重新读取实时外接屏状态而非用旧快照。
+    func maintainBuiltInDisconnect() {
+        guard isHeadlessModeEnabled, !currentExternalDisplays().isEmpty else { return }
+        if isTestMode {
+            wasMaintainDisconnectCalled = true
+            return
+        }
+        DisplayManager.shared.disconnectBuiltIn()
+    }
+
     func currentExternalDisplays() -> Set<CGDirectDisplayID> {
         if let mock = mockExternalDisplays {
             return mock
         }
-        var count: UInt32 = 0
-        guard CGGetOnlineDisplayList(0, nil, &count) == .success else { return [] }
-        var displays = [CGDirectDisplayID](repeating: 0, count: Int(count))
-        guard CGGetOnlineDisplayList(count, &displays, &count) == .success else { return [] }
-        return Set(displays.filter { CGDisplayIsBuiltin($0) == 0 })
+        guard let online = DisplayManager.shared.onlineDisplayIDs() else { return [] }
+        return Set(online.filter { CGDisplayIsBuiltin($0) == 0 && !DisplayManager.isVirtualDisplay($0) })
     }
     
     func enableHeadlessMode() {
         wasEnableHeadlessModeCalled = true
-        guard !isHeadlessModeEnabled else { return }
+        guard !isHeadlessModeEnabled, !isTestMode else { return }
         isHeadlessModeEnabled = true
         UserDefaults.standard.set(true, forKey: "HeadlessModeEnabled")
         NSLog("MacHead: 正在启用无头模式...")
@@ -125,7 +143,7 @@ final class HeadlessModeController {
     
     func disableHeadlessMode() {
         wasDisableHeadlessModeCalled = true
-        guard isHeadlessModeEnabled else { return }
+        guard isHeadlessModeEnabled, !isTestMode else { return }
         isHeadlessModeEnabled = false
         UserDefaults.standard.set(false, forKey: "HeadlessModeEnabled")
         NSLog("MacHead: 正在关闭无头模式...")
@@ -150,24 +168,12 @@ final class HeadlessModeController {
         TelemetryManager.shared.track(event: "app_event", extraInfo: ["action": "disable_headless"])
     }
     
-    /// 触发防黑屏安全恢复，强行退出无头模式并弹窗告警
+    /// 触发安全恢复，直接退出无头模式
     func triggerSafeRecovery() {
         wasTriggerSafeRecoveryCalled = true
-        guard isHeadlessModeEnabled else { return }
-        
-        // 1. 退出无头模式
+        guard isHeadlessModeEnabled, !isTestMode else { return }
+        NSLog("MacHead: 检测到外接屏断开，直接退出无头模式以恢复内屏")
         disableHeadlessMode()
-        
-        // 3. 弹窗警告用户
-        let alert = NSAlert()
-        alert.messageText = "安全恢复提示"
-        alert.informativeText = "检测到所有外接显示器已断开。为了防止屏幕彻底黑屏，MacHead 已自动退出 Headless 模式并恢复了内置显示屏。"
-        alert.alertStyle = .warning
-        alert.addButton(withTitle: "我知道了")
-        
-        // 将应用带到前台显示弹窗
-        NSApp.activate(ignoringOtherApps: true)
-        alert.runModal()
     }
     
     /// 动态管理空闲与合盖睡眠断言
@@ -250,9 +256,7 @@ final class HeadlessModeController {
         guard isHeadlessModeEnabled else { return }
         NSLog("MacHead: 系统唤醒，检查并确保内置显示器断开...")
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            if self.isHeadlessModeEnabled {
-                DisplayManager.shared.disconnectBuiltIn()
-            }
+            self.maintainBuiltInDisconnect()
         }
     }
     
@@ -260,97 +264,131 @@ final class HeadlessModeController {
         print("Running HeadlessModeController Unit Tests...")
         let controller = HeadlessModeController.shared
         
+        // 测试模式：动作只记录标志位，绝不触碰真实显示器/麦克风/遥测
+        controller.isTestMode = true
+
         // Save current real state
         let originalIsHeadless = controller.isHeadlessModeEnabled
         let originalIsMonitoring = controller.isDisplayMonitoringStarted
         let originalActiveExternals = controller.activeExternalDisplays
-        
+
         defer {
             // Restore original state
             controller.isHeadlessModeEnabled = originalIsHeadless
             controller.isDisplayMonitoringStarted = originalIsMonitoring
             controller.activeExternalDisplays = originalActiveExternals
             controller.mockExternalDisplays = nil
+            controller.mockBuiltInOnline = nil
+            controller.isTestMode = false
         }
-        
+
         // Helper to reset hooks
         func resetHooks() {
             controller.wasEnableHeadlessModeCalled = false
             controller.wasDisableHeadlessModeCalled = false
             controller.wasTriggerSafeRecoveryCalled = false
+            controller.wasMaintainDisconnectCalled = false
         }
-        
+
+        // 回调里的动作经 DispatchQueue.main.async 派发，而 CLI 进程没有常驻 runloop，
+        // 必须排水主队列，被派发的动作才会真正执行、标志位才会被记录。
+        // 注意：用 precondition 而非 assert —— assert 在 -O 下会被整体编译移除，测试将永远"假绿"。
+        func drainMainQueue(seconds: Double = 0.05) {
+            RunLoop.current.run(until: Date(timeIntervalSinceNow: seconds))
+        }
+
+        // 模拟一次"显示器配置变更完成"事件：重置钩子、设置 mock 状态并触发回调
+        func fireChange(headless: Bool,
+                        previous: Set<CGDirectDisplayID>,
+                        current: Set<CGDirectDisplayID>,
+                        builtInOnline: Bool = false,
+                        displayID: CGDirectDisplayID = 101,
+                        flags: CGDisplayChangeSummaryFlags = []) {
+            resetHooks()
+            controller.isHeadlessModeEnabled = headless
+            controller.activeExternalDisplays = previous
+            controller.mockExternalDisplays = current
+            controller.mockBuiltInOnline = builtInOnline
+            displayReconfigurationCallback(displayID: displayID, flags: flags,
+                                           userInfo: Unmanaged.passUnretained(controller).toOpaque())
+        }
+
+        controller.isDisplayMonitoringStarted = true
+
         // Test 1: Manually turning off headless mode when an external display is connected.
         // We want to make sure AutoRestoreHeadlessOnConnect does NOT trigger.
         print("Test 1: Manually turning off headless mode when an external display is connected...")
-        resetHooks()
-        controller.isHeadlessModeEnabled = false // simulate we just set it to false
-        controller.activeExternalDisplays = [101]
-        controller.isDisplayMonitoringStarted = true
-        controller.mockExternalDisplays = [101] // external display remains connected
-        
-        // Trigger reconfiguration callback manually
-        displayReconfigurationCallback(displayID: 101, flags: [], userInfo: Unmanaged.passUnretained(controller).toOpaque())
-        
-        assert(!controller.wasEnableHeadlessModeCalled, "FAIL: Auto-restore was incorrectly triggered when manually disabling headless mode!")
+        fireChange(headless: false, previous: [101], current: [101]) // external display remains connected
+        drainMainQueue()
+
+        precondition(!controller.wasEnableHeadlessModeCalled, "FAIL: Auto-restore was incorrectly triggered when manually disabling headless mode!")
+        precondition(!controller.wasMaintainDisconnectCalled, "FAIL: Maintain-disconnect was incorrectly triggered when headless mode is off!")
         print("Test 1: PASS")
-        
+
         // Test 2: Unplugging the last external display when headless mode is active.
         // We expect triggerSafeRecovery to be called.
         print("Test 2: Unplugging the last external display when headless mode is active...")
-        resetHooks()
-        controller.isHeadlessModeEnabled = true
-        controller.activeExternalDisplays = [101]
-        controller.isDisplayMonitoringStarted = true
-        controller.mockExternalDisplays = [] // unplugged
-        
         // Make sure user defaults has AutoExitHeadlessOnDisconnect set to true for test consistency
         let originalAutoExit = UserDefaults.standard.bool(forKey: "AutoExitHeadlessOnDisconnect")
         UserDefaults.standard.set(true, forKey: "AutoExitHeadlessOnDisconnect")
         defer {
             UserDefaults.standard.set(originalAutoExit, forKey: "AutoExitHeadlessOnDisconnect")
         }
-        
-        displayReconfigurationCallback(displayID: 101, flags: [], userInfo: Unmanaged.passUnretained(controller).toOpaque())
-        
-        assert(controller.wasTriggerSafeRecoveryCalled, "FAIL: Safe recovery was not triggered when all external displays were disconnected!")
+
+        fireChange(headless: true, previous: [101], current: []) // unplugged
+        drainMainQueue()
+
+        precondition(controller.wasTriggerSafeRecoveryCalled, "FAIL: Safe recovery was not triggered when all external displays were disconnected!")
         print("Test 2: PASS")
-        
+
         // Test 3: Plugging in a new external display when headless mode is inactive.
         // We expect enableHeadlessMode to be called.
         print("Test 3: Plugging in a new external display when headless mode is inactive...")
-        resetHooks()
-        controller.isHeadlessModeEnabled = false
-        controller.activeExternalDisplays = []
-        controller.isDisplayMonitoringStarted = true
-        controller.mockExternalDisplays = [101] // plugged in
-        
         let originalAutoRestore = UserDefaults.standard.bool(forKey: "AutoRestoreHeadlessOnConnect")
         UserDefaults.standard.set(true, forKey: "AutoRestoreHeadlessOnConnect")
         defer {
             UserDefaults.standard.set(originalAutoRestore, forKey: "AutoRestoreHeadlessOnConnect")
         }
-        
-        displayReconfigurationCallback(displayID: 101, flags: [], userInfo: Unmanaged.passUnretained(controller).toOpaque())
-        
-        assert(controller.wasEnableHeadlessModeCalled, "FAIL: Headless mode was not auto-restored when new display connected!")
+
+        fireChange(headless: false, previous: [], current: [101]) // plugged in
+        drainMainQueue()
+
+        precondition(controller.wasEnableHeadlessModeCalled, "FAIL: Headless mode was not auto-restored when new display connected!")
         print("Test 3: PASS")
-        
+
         // Test 4: Plugging in a second external display when headless mode is active.
         // We expect no action.
         print("Test 4: Plugging in a second external display when headless mode is active...")
-        resetHooks()
-        controller.isHeadlessModeEnabled = true
-        controller.activeExternalDisplays = [101]
-        controller.isDisplayMonitoringStarted = true
-        controller.mockExternalDisplays = [101, 102]
-        
-        displayReconfigurationCallback(displayID: 102, flags: [], userInfo: Unmanaged.passUnretained(controller).toOpaque())
-        
-        assert(!controller.wasEnableHeadlessModeCalled, "FAIL: Incorrect action when adding second external display in headless mode!")
-        assert(!controller.wasDisableHeadlessModeCalled, "FAIL: Headless mode disabled when adding second external display!")
+        fireChange(headless: true, previous: [101], current: [101, 102], builtInOnline: false) // 内屏本应离线
+        drainMainQueue()
+
+        precondition(!controller.wasEnableHeadlessModeCalled, "FAIL: Incorrect action when adding second external display in headless mode!")
+        precondition(!controller.wasDisableHeadlessModeCalled, "FAIL: Headless mode disabled when adding second external display!")
+        precondition(!controller.wasMaintainDisconnectCalled, "FAIL: Maintain-disconnect triggered when adding second external display!")
         print("Test 4: PASS")
-        
+
+        // Test 5: Built-in display begins configuration when no external displays are connected.
+        // Protect built-in display from being mistakenly disconnected.
+        print("Test 5: Built-in display begins configuration when no external displays are connected...")
+        fireChange(headless: true, previous: [], current: [], displayID: 1, flags: [.beginConfigurationFlag])
+        drainMainQueue()
+
+        precondition(controller.isHeadlessModeEnabled, "FAIL: Headless mode should not be corrupted by beginConfigurationFlag!")
+        precondition(!controller.wasMaintainDisconnectCalled, "FAIL: Maintain-disconnect triggered during beginConfigurationFlag!")
+        print("Test 5: PASS")
+
+        // Test 6: Headless mode is active, the system unexpectedly re-lit the built-in display,
+        // and external displays are still connected. Expect the built-in to be re-disconnected.
+        print("Test 6: Headless mode with built-in unexpectedly re-lit and externals present...")
+        fireChange(headless: true, previous: [101], current: [101], builtInOnline: true) // 模拟系统把内屏点亮
+
+        // 维持断开带有 0.3 秒延迟，需要更长的排水窗口
+        drainMainQueue(seconds: 0.4)
+
+        precondition(controller.wasMaintainDisconnectCalled, "FAIL: Built-in display was not re-disconnected while headless mode is active with externals present!")
+        precondition(controller.isHeadlessModeEnabled, "FAIL: Maintain-disconnect should not turn off headless mode!")
+        print("Test 6: PASS")
+
         print("All Tests Passed Successfully! 🎉")
     }
 }
