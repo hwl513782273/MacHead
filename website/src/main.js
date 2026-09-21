@@ -517,6 +517,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // 7. Landing Page Changelog Minimalist Feed Renderer (No Download Buttons)
     const CHANGELOG_DATA = [
         {
+            version: "0.1.21",
+            date: "2026-09-21",
+            title: "外屏断开自动恢复内屏修复",
+            bullets: [
+                "修复断开外屏后内屏无法自动恢复的问题，系统虚拟屏不再被误判为外接显示器。",
+                "恢复可靠性增强：显示器配置事务完成后统一决策、恢复失败自动重试、重复操作幂等跳过。",
+                "偏好设置与菜单栏的外接显示器列表口径统一。"
+            ]
+        },
+        {
             version: "0.1.20",
             date: "2026-09-19",
             title: "内网穿透独立分区与遥测开关",
