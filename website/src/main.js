@@ -517,6 +517,19 @@ document.addEventListener('DOMContentLoaded', () => {
     // 7. Landing Page Changelog Minimalist Feed Renderer (No Download Buttons)
     const CHANGELOG_DATA = [
         {
+            version: "0.1.22",
+            date: "2026-09-23",
+            title: "全景电池管理、智能 UPS 守护与防鼓包限充",
+            bullets: [
+                "偏好设置新增独立「电池」专区，对齐 macOS 原生设计规范与图标体系。",
+                "全景电气与健康指标：实时充放电功率 (W)、母线电压/电流、充电适配器规格、最大可用容量与原厂设计容量对比。",
+                "智能 UPS 模式：市电中断时自动推算剩余续航倒计时，并增强 Bark / Telegram / 系统级断电预警。",
+                "防鼓包充电上限 (Charge Limit)：支持 50%~90% 调节与 Sailing Mode 回充死区；老系统专属 SMC 守护，新系统协同原生固件限充。",
+                "静默无感控充：重构特权授权通道，支持一次性免密配置，彻底消除后台弹窗打扰。",
+                "远程 Web 控制台同步：支持远程查看实时电气指标并在线调节充电上限。"
+            ]
+        },
+        {
             version: "0.1.21",
             date: "2026-09-21",
             title: "外屏断开自动恢复内屏修复",
