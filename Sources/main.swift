@@ -43,6 +43,29 @@ if arguments.count > 1 {
     } else if arg == "--test" {
         HeadlessModeController.runTests()
         exit(0)
+
+    } else if arg == "--inhibit-charging" || arg == "--charge-inhibit" {
+        let val = arguments.count > 2 ? arguments[2] : "1"
+        let inhibit = (val == "1" || val.lowercased() == "true")
+        let success = SMCManager.shared.setChargingInhibited(inhibit)
+        if success {
+            print(inhibit ? "Charging inhibited (stopped)" : "Charging restored (enabled)")
+            exit(0)
+        } else {
+            print("Failed to set charging inhibit via SMC (requires root privileges)")
+            exit(1)
+        }
+
+    } else if arg == "--set-bclm" {
+        let limit = arguments.count > 2 ? (Int(arguments[2]) ?? 80) : 80
+        let success = SMCManager.shared.setBCLMChargeLimit(limit)
+        if success {
+            print("BCLM charge limit set to \(limit)%")
+            exit(0)
+        } else {
+            print("Failed to set BCLM via SMC (requires root privileges or Apple Silicon doesn't support BCLM)")
+            exit(1)
+        }
         
     } else if arg == "--help" || arg == "-h" || arg == "help" {
         print("MacHead - MacBook Headless Mode Manager (CLI Client)")

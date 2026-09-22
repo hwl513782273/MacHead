@@ -126,15 +126,19 @@ final class WebServer {
         }
     }
     
-    private func extractPassword(from body: String) -> String? {
+    private func extractParameter(named name: String, from body: String) -> String? {
         let pairs = body.components(separatedBy: "&")
         for pair in pairs {
             let kv = pair.components(separatedBy: "=")
-            if kv.count == 2 && kv[0] == "password" {
+            if kv.count == 2 && kv[0] == name {
                 return kv[1].removingPercentEncoding
             }
         }
         return nil
+    }
+
+    private func extractPassword(from body: String) -> String? {
+        return extractParameter(named: "password", from: body)
     }
     
     private func verifyAuthorization(headers: [String]) -> Bool {
@@ -253,13 +257,8 @@ final class WebServer {
             }
         } else if method == "POST" && path == "/api/save-cloudflare-token" {
             DispatchQueue.main.async {
-                let pairs = bodyPart.components(separatedBy: "&")
-                for pair in pairs {
-                    let kv = pair.components(separatedBy: "=")
-                    if kv.count == 2 && kv[0] == "token" {
-                        let tokenVal = kv[1].removingPercentEncoding ?? ""
-                        UserDefaults.standard.set(tokenVal, forKey: "cloudflareToken")
-                    }
+                if let tokenVal = self.extractParameter(named: "token", from: bodyPart) {
+                    UserDefaults.standard.set(tokenVal, forKey: "cloudflareToken")
                 }
                 IntegrationManager.shared.reloadServices()
                 self.sendResponse(json: self.getStatusJSON(), connection: connection)
@@ -270,6 +269,19 @@ final class WebServer {
                 let val = !UserDefaults.standard.bool(forKey: key)
                 UserDefaults.standard.set(val, forKey: key)
                 NotificationCenter.default.post(name: .headlessModeStateChanged, object: nil)
+                self.sendResponse(json: self.getStatusJSON(), connection: connection)
+            }
+        } else if method == "POST" && path == "/api/toggle-charge-limit" {
+            DispatchQueue.main.async {
+                BatteryManager.shared.customLimitEnabled.toggle()
+                self.sendResponse(json: self.getStatusJSON(), connection: connection)
+            }
+        } else if method == "POST" && path == "/api/set-charge-limit" {
+            DispatchQueue.main.async {
+                if let limitStr = self.extractParameter(named: "limit", from: bodyPart),
+                   let intVal = Int(limitStr) {
+                    BatteryManager.shared.customLimitThreshold = max(50, min(90, intVal))
+                }
                 self.sendResponse(json: self.getStatusJSON(), connection: connection)
             }
         } else {
@@ -423,13 +435,14 @@ final class WebServer {
         let cpuTemp = SMCManager.shared.currentTemperature
         let gpuMem = getGPUMemoryUsage()
         
-        BatteryManager.shared.updateBatteryRegistryInfo()
-        
+        let battery = BatteryManager.shared
+        battery.updateBatteryRegistryInfo()
+
         let disk = getDiskUsage()
         let uptime = getSystemUptime()
         let thermal = getThermalState()
         let (rxSpeed, txSpeed) = getNetworkSpeed()
-        
+
         return """
         {
           "headlessModeEnabled": \(HeadlessModeController.shared.isHeadlessModeEnabled),
@@ -438,9 +451,9 @@ final class WebServer {
           "trackpadDisabled": \(UserDefaults.standard.bool(forKey: "DisableTrackpadWhenExternalMouseConnected")),
           "keyboardAndTrackpadDisabledInHeadless": \(UserDefaults.standard.bool(forKey: "DisableKeyboardAndTrackpadInHeadlessMode")),
           "microphoneMuted": \(MediaDeviceManager.shared.isMuted),
-          "batteryCapacity": \(BatteryManager.shared.currentCapacity),
-          "isCharging": \(BatteryManager.shared.isCharging),
-          "powerState": "\(BatteryManager.shared.powerState)",
+          "batteryCapacity": \(battery.currentCapacity),
+          "isCharging": \(battery.isCharging),
+          "powerState": "\(battery.powerState)",
           "cpuUsage": \(cpu),
           "cpuTemp": \(cpuTemp),
           "memoryUsage": \(ram),
@@ -456,9 +469,26 @@ final class WebServer {
           "diskPercent": \(disk.percent),
           "uptime": "\(uptime)",
           "thermalState": "\(thermal)",
-          "batteryHealth": \(BatteryManager.shared.batteryHealth),
-          "batteryCycleCount": \(BatteryManager.shared.cycleCount),
-          "batteryTemp": \(BatteryManager.shared.batteryTemperature),
+          "batteryHealth": \(battery.batteryHealth),
+          "batteryCycleCount": \(battery.cycleCount),
+          "batteryTemp": \(battery.batteryTemperature),
+          "batteryPowerWatts": \(battery.powerWatts),
+          "batteryVoltage": \(battery.voltage),
+          "batteryAmperage": \(battery.amperage),
+          "adapterWatts": \(battery.adapterWatts),
+          "adapterName": "\(battery.adapterName)",
+          "rawCurrentCapacity": \(battery.rawCurrentCapacity),
+          "rawMaxCapacity": \(battery.rawMaxCapacity),
+          "designCapacity": \(battery.designCapacity),
+          "isUPSActive": \(battery.isUPSActive),
+          "timeRemainingMinutes": \(battery.timeRemainingMinutes),
+          "timeRemainingFormatted": "\(battery.timeRemainingFormatted)",
+          "isChargeLimitEnabled": \(battery.isChargeLimitEnabled),
+          "chargeLimitPercent": \(battery.chargeLimitPercent),
+          "chargeLimitSource": "\(battery.chargeLimitSource)",
+          "customLimitEnabled": \(battery.customLimitEnabled),
+          "customLimitThreshold": \(battery.customLimitThreshold),
+          "isSupportedNativeLimit": \(battery.isSupportedNativeLimit),
           "rxSpeed": \(rxSpeed),
           "txSpeed": \(txSpeed),
           "frpEnabled": \(UserDefaults.standard.bool(forKey: "frpEnabled")),

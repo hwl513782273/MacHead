@@ -731,16 +731,24 @@
                                 </td>
                             </tr>
                             <tr>
-                                <td class="label">电池健康度</td>
-                                <td class="val" id="battery-health">--%</td>
-                            </tr>
-                            <tr>
-                                <td class="label">电池循环次数</td>
-                                <td class="val" id="battery-cycles">-- 次</td>
+                                <td class="label">即时充放功耗</td>
+                                <td class="val" id="battery-power-val">0.0 W</td>
                             </tr>
                             <tr>
                                 <td class="label">当前供电来源</td>
                                 <td class="val" id="power-source-text">正在查询...</td>
+                            </tr>
+                            <tr>
+                                <td class="label">预计支撑 / 状态</td>
+                                <td class="val" id="battery-time-remaining">--</td>
+                            </tr>
+                            <tr>
+                                <td class="label">电池健康 / 循环</td>
+                                <td class="val"><span id="battery-health">--%</span> · <span id="battery-cycles">-- 次</span></td>
+                            </tr>
+                            <tr>
+                                <td class="label">防鼓包限充保护</td>
+                                <td class="val" id="charge-limit-status">正在检测...</td>
                             </tr>
                         </table>
                     </div>
@@ -833,6 +841,28 @@
                                 <input type="checkbox" id="restore-connect-toggle" onchange="toggleSetting('restore-connect')">
                                 <span class="slider"></span>
                             </label>
+                        </div>
+
+                        <div class="control-row">
+                            <div>
+                                <div class="control-label">防鼓包充电上限 (Charge Limit)</div>
+                                <div class="control-desc" id="charge-limit-desc">达到设定上限后暂停充电，延缓电池高压与发热老化（老系统/全机型通用）。</div>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:10px;">
+                                <select id="charge-limit-select" onchange="setChargeLimitValue(this.value)" style="background:#232328; color:#eee; border:1px solid #444; border-radius:6px; padding:4px 8px; font-size:12px; cursor:pointer;">
+                                    <option value="50">50%</option>
+                                    <option value="60">60%</option>
+                                    <option value="70">70%</option>
+                                    <option value="75">75%</option>
+                                    <option value="80" selected>80%</option>
+                                    <option value="85">85%</option>
+                                    <option value="90">90%</option>
+                                </select>
+                                <label class="switch">
+                                    <input type="checkbox" id="charge-limit-toggle" onchange="toggleSetting('charge-limit')">
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
                         </div>
                     </div>
             </div>
@@ -1035,17 +1065,50 @@
                     document.getElementById('microphone-toggle').checked = data.microphoneMuted;
                     document.getElementById('exit-disconnect-toggle').checked = data.autoExitHeadlessOnDisconnect;
                     document.getElementById('restore-connect-toggle').checked = data.autoRestoreHeadlessOnConnect;
+
+                    const limitToggle = document.getElementById('charge-limit-toggle');
+                    if (limitToggle) limitToggle.checked = data.customLimitEnabled;
+
+                    const limitThreshold = data.customLimitThreshold || 80;
+                    const limitSelect = document.getElementById('charge-limit-select');
+                    if (limitSelect) limitSelect.value = String(limitThreshold);
+
+                    const descEl = document.getElementById('charge-limit-desc');
+                    if (descEl) {
+                        if (data.customLimitEnabled) {
+                            const resumeVal = Math.max(20, limitThreshold - 5);
+                            descEl.innerHTML = '<span style="color:#52c41a;font-weight:600;">已开启自主守护：</span>' + limitThreshold + '% 停止充电，降至 ' + resumeVal + '% 恢复补电 (Sailing Mode)。';
+                        } else {
+                            descEl.innerText = '达到设定上限后暂停充电，延缓电池高压与发热老化（老系统/全机型通用）。';
+                        }
+                    }
                     
-                    // Power Source
+                    // Power Source & Electrical metrics
                     document.getElementById('battery-capacity').innerText = data.batteryCapacity + '%';
                     document.getElementById('charging-indicator').style.display = data.isCharging ? 'inline' : 'none';
-                    document.getElementById('power-source-text').innerText = 
-                        data.powerState === "AC Power" ? "🔌 外接电源 (AC)" : "🔋 电池供电 (未接电源)";
-                    
+
+                    const powerWatts = data.batteryPowerWatts || 0;
+                    document.getElementById('battery-power-val').innerText = powerWatts > 0 ? (powerWatts.toFixed(1) + ' W') : (data.isCharging ? '充电中' : '0.0 W (直供)');
+
+                    if (data.isUPSActive) {
+                        document.getElementById('power-source-text').innerHTML = '<span style="color:#f5a623;font-weight:600;">🔋 电池供电 (UPS 模式)</span>';
+                        document.getElementById('battery-time-remaining').innerHTML = '<span style="color:#f5a623;font-weight:600;">预计支撑 ' + (data.timeRemainingFormatted || '计算中...') + '</span>';
+                    } else {
+                        const adapterText = data.adapterWatts > 0 ? (' (' + data.adapterWatts + 'W 适配器)') : ' (AC)';
+                        document.getElementById('power-source-text').innerText = '🔌 外接电源' + adapterText;
+                        document.getElementById('battery-time-remaining').innerText = data.timeRemainingFormatted || (data.isCharging ? '正在充电' : '交流电直供');
+                    }
+
                     // Battery registry info
                     document.getElementById('battery-health').innerText = data.batteryHealth.toFixed(1) + '%';
                     document.getElementById('battery-cycles').innerText = data.batteryCycleCount + ' 次';
                     document.getElementById('battery-temp-text').innerText = data.batteryTemp.toFixed(1) + ' °C';
+
+                    if (data.isChargeLimitEnabled) {
+                        document.getElementById('charge-limit-status').innerHTML = '<span style="color:#52c41a;font-weight:600;">已保护 (' + data.chargeLimitPercent + '%)</span>';
+                    } else {
+                        document.getElementById('charge-limit-status').innerHTML = '<span style="color:#fa8c16;">建议开启 (80%)</span>';
+                    }
 
                     // Uptime & Thermal
                     document.getElementById('uptime-text').innerText = data.uptime;
@@ -1209,12 +1272,14 @@
                         });
                     }
 
-                    // 3. Power outage warning
-                    if (data.powerState !== "AC Power") {
+                    // 3. Power outage warning (UPS Mode)
+                    if (data.isUPSActive) {
+                        const estTimeStr = data.timeRemainingFormatted ? ('预计可支撑运行约 ' + data.timeRemainingFormatted) : '正在测算剩余支撑时间';
+                        const powerStr = (data.batteryPowerWatts > 0) ? ('，当前放电功耗 ' + data.batteryPowerWatts.toFixed(1) + 'W') : '';
                         alerts.push({
                             type: 'warning',
-                            icon: '🔌',
-                            text: '<b>外接电源断开：</b>MacBook 正在通过电池供电运行（剩余 ' + data.batteryCapacity + '%）。若电量低于低电量保护阈值，防睡眠 assertion 将自动撤销并允许休眠。'
+                            icon: '🔋',
+                            text: '<b>UPS 电池模式运行中：</b>外部市电已中断，MacBook 依靠内置电池续航（剩余 ' + data.batteryCapacity + '%，' + estTimeStr + powerStr + '）。若电量跌破阈值，将自动进入安全休眠。'
                         });
                     }
 
@@ -1224,6 +1289,15 @@
                             type: 'warning',
                             icon: '🔋',
                             text: '<b>电池建议检修：</b>最大容量已劣化至 ' + data.batteryHealth.toFixed(1) + '%（低于 80%），长期 7×24 小时插电运行请关注电池安全。'
+                        });
+                    }
+
+                    // 5. Charge Limit recommendation
+                    if (data.isChargeLimitEnabled === false && data.powerState === "AC Power" && data.batteryCapacity >= 95) {
+                        alerts.push({
+                            type: 'warning',
+                            icon: '🛡️',
+                            text: '<b>长期满电建议开启 80% 限充：</b>当前电量已达 100%。作为长期合盖常驻服务器，持续高压高充易导致锂电池加速鼓包，建议在系统设置中开启 80% 充电上限。'
                         });
                     }
 
@@ -1249,14 +1323,29 @@
                         case 'microphone': url = '/api/toggle-microphone'; break;
                         case 'exit-disconnect': url = '/api/toggle-exit-on-disconnect'; break;
                         case 'restore-connect': url = '/api/toggle-restore-on-connect'; break;
+                        case 'charge-limit': url = '/api/toggle-charge-limit'; break;
                     }
-                    
+
                     try {
                         const response = await fetch(url, { method: 'POST' });
                         const data = await response.json();
                         updateUI(data);
                     } catch (err) {
                         console.error(`Failed to toggle ${type}:`, err);
+                    }
+                }
+
+                async function setChargeLimitValue(val) {
+                    try {
+                        const response = await fetch('/api/set-charge-limit', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                            body: 'limit=' + encodeURIComponent(val)
+                        });
+                        const data = await response.json();
+                        updateUI(data);
+                    } catch (err) {
+                        console.error('Failed to set charge limit:', err);
                     }
                 }
 

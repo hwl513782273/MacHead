@@ -89,10 +89,10 @@ enum CLIToolInstaller {
         }
     }
 
-    // MARK: - Private Helpers
+    // MARK: - Privileged Helpers
 
     /// 提权执行 shell 命令 (osascript)
-    private static func runElevated(_ command: String) -> Bool {
+    static func runElevated(_ command: String) -> Bool {
         let script = "do shell script \"\(command)\" with administrator privileges"
         if let appleScript = NSAppleScript(source: script) {
             var error: NSDictionary?

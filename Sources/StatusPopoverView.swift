@@ -109,15 +109,15 @@ struct StatusPopoverView: View {
                     subtitle: externalDisplaysCount > 0 ? "外接屏: \(externalDisplaysCount) 台" : "未接入外设屏"
                 )
                 
-                // Card 2: 电池与电量
+                // Card 2: 电池与电源状态
                 MetricTileView(
-                    icon: battery.isCharging ? "bolt.batteryblock.fill" : "battery.100",
-                    iconColor: battery.isCharging ? .green : .orange,
-                    title: "电源状态",
+                    icon: powerTileIcon,
+                    iconColor: powerTileColor,
+                    title: battery.isUPSActive ? "UPS 供电中" : "电源状态",
                     value: "\(battery.currentCapacity)%",
-                    subtitle: battery.isCharging ? "⚡️ AC 插电供电" : "🔋 电池供电中"
+                    subtitle: powerTileSubtitle
                 )
-                
+
                 // Card 3: CPU 与热度
                 MetricTileView(
                     icon: "thermometer.medium",
@@ -126,14 +126,14 @@ struct StatusPopoverView: View {
                     value: smc.currentTemperature > 0 ? String(format: "%.1f °C", smc.currentTemperature) : "-- °C",
                     subtitle: smc.fanSpeed > 0 ? "风扇: \(smc.fanSpeed) RPM" : "静音被动散热"
                 )
-                
-                // Card 4: 电池温度/设备保护
+
+                // Card 4: 电池健康/寿命
                 MetricTileView(
-                    icon: "shield.checkerboard",
-                    iconColor: .purple,
-                    title: "电池保护",
-                    value: battery.batteryTemperature > 0 ? String(format: "%.1f °C", battery.batteryTemperature) : "正常",
-                    subtitle: "阈值: \(UserDefaults.standard.integer(forKey: "BatteryThreshold"))%"
+                    icon: battery.powerWatts > 0 ? "bolt.fill" : "heart.fill",
+                    iconColor: battery.isUPSActive ? .orange : (battery.batteryHealth >= 80 ? .green : .orange),
+                    title: battery.powerWatts > 0 ? "即时功耗" : "电池健康度",
+                    value: battery.powerWatts > 0 ? String(format: "%.1f W", battery.powerWatts) : (battery.batteryHealth > 0 ? String(format: "%.0f%%", battery.batteryHealth) : "正常"),
+                    subtitle: battery.powerWatts > 0 ? "健康: \(Int(battery.batteryHealth))% · \(battery.cycleCount)次" : batteryHealthSubtitle
                 )
             }
             
@@ -218,6 +218,41 @@ struct StatusPopoverView: View {
             self.isHeadless = HeadlessModeController.shared.isHeadlessModeEnabled
             self.externalDisplaysCount = HeadlessModeController.shared.currentExternalDisplays().count
         }
+    }
+
+    // MARK: - Computed Properties for Metrics Cards
+    private var powerTileIcon: String {
+        if battery.isCharging { return "bolt.batteryblock.fill" }
+        if battery.isUPSActive { return "bolt.slash.fill" }
+        if battery.isChargeLimitEnabled { return "checkmark.shield.fill" }
+        return "battery.100"
+    }
+
+    private var powerTileColor: Color {
+        if battery.isCharging { return .green }
+        if battery.isUPSActive { return .orange }
+        if battery.isChargeLimitEnabled { return .green }
+        return .blue
+    }
+
+    private var powerTileSubtitle: String {
+        if battery.isUPSActive {
+            let time = battery.timeRemainingFormatted.isEmpty ? "测算中" : battery.timeRemainingFormatted
+            return "🔋 UPS (\(time))"
+        }
+        let adapterStr = battery.adapterWatts > 0 ? "\(battery.adapterWatts)W" : "AC"
+        if battery.isCharging {
+            return "⚡️ 充电中 (\(adapterStr))"
+        }
+        if battery.isChargeLimitEnabled {
+            return "⚡️ AC 直供 (\(battery.chargeLimitPercent)% 限充)"
+        }
+        return "⚡️ AC 直供 (\(adapterStr))"
+    }
+
+    private var batteryHealthSubtitle: String {
+        let tempStr = battery.batteryTemperature > 0 ? String(format: "%.1f°C", battery.batteryTemperature) : "良好"
+        return "循环 \(battery.cycleCount) 次 · \(tempStr)"
     }
 }
 

@@ -10,6 +10,7 @@ struct DisplayInfo: Hashable {
 
 enum PreferenceTab: String, CaseIterable, Identifiable {
     case general
+    case power
     case hardware
     case integrations
     case tunneling
@@ -20,7 +21,8 @@ enum PreferenceTab: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .general: return "常规设置"
-        case .hardware: return "硬件与电源"
+        case .power: return "电池"
+        case .hardware: return "硬件与外设"
         case .integrations: return "监控与通知"
         case .tunneling: return "内网穿透"
         case .status: return "显示器与状态"
@@ -30,20 +32,22 @@ enum PreferenceTab: String, CaseIterable, Identifiable {
     var iconName: String {
         switch self {
         case .general: return "gearshape.fill"
-        case .hardware: return "cpu"
-        case .integrations: return "chart.line.uptrend.xyaxis"
+        case .power: return "battery.100"
+        case .hardware: return "keyboard.fill"
+        case .integrations: return "bell.badge.fill"
         case .tunneling: return "arrow.left.arrow.right"
-        case .status: return "display"
+        case .status: return "display.2"
         }
     }
 
     var iconColor: Color {
         switch self {
         case .general: return .gray // Metallic grey to match native General tab, prevents blending when row is highlighted
+        case .power: return .green
         case .hardware: return .orange
         case .integrations: return .purple
         case .tunneling: return .blue
-        case .status: return .green
+        case .status: return .teal
         }
     }
 }
@@ -136,9 +140,6 @@ struct PreferencesView: View {
 
     @State private var enableBatteryProtection = UserDefaults.standard.bool(forKey: "EnableBatteryProtection")
     @State private var batteryThreshold = UserDefaults.standard.integer(forKey: "BatteryThreshold") == 0 ? 20 : UserDefaults.standard.integer(forKey: "BatteryThreshold")
-    @State private var batteryCapacity = BatteryManager.shared.currentCapacity
-    @State private var batteryState = BatteryManager.shared.powerState
-    @State private var isCharging = BatteryManager.shared.isCharging
     @State private var muteMicrophone = UserDefaults.standard.bool(forKey: "MuteMicrophoneInHeadlessMode")
     @State private var isMicrophoneMuted = MediaDeviceManager.shared.isMuted
     @State private var enableWebServer = UserDefaults.standard.bool(forKey: "EnableWebServer")
@@ -146,8 +147,9 @@ struct PreferencesView: View {
     @State private var webServerPassword = UserDefaults.standard.string(forKey: "WebServerPassword") ?? ""
     @State private var isAccessibilityTrusted = AXIsProcessTrusted()
 
-    // SMC metrics watcher
+    // Hardware & Battery metrics watchers
     @ObservedObject private var smc = SMCManager.shared
+    @ObservedObject private var battery = BatteryManager.shared
 
     @State private var nezhaEnabled = UserDefaults.standard.bool(forKey: "nezhaEnabled")
     @State private var nezhaServer = UserDefaults.standard.string(forKey: "nezhaServer") ?? ""
@@ -470,9 +472,52 @@ struct PreferencesView: View {
                                 }
                             }
                             
-                        case .hardware:
-                            SettingsCard(title: "电源管理") {
-                                SettingsRow("防止空闲睡眠") {
+                        case .power:
+                            if battery.isUPSActive {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "bolt.batteryblock.fill")
+                                        .font(.system(size: 22, weight: .bold))
+                                        .foregroundColor(.orange)
+
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        HStack(spacing: 6) {
+                                            Text("正在以电池 UPS 模式运行")
+                                                .font(.system(size: 13, weight: .bold))
+                                                .foregroundColor(.primary)
+
+                                            Text("无人值守供电中")
+                                                .font(.system(size: 10, weight: .semibold))
+                                                .foregroundColor(.orange)
+                                                .padding(.horizontal, 6)
+                                                .padding(.vertical, 1)
+                                                .background(Capsule().fill(Color.orange.opacity(0.18)))
+                                        }
+
+                                        Text("外部市电已中断 · 预计还可支撑运行约 \(battery.timeRemainingFormatted) · 放电功率 \(String(format: "%.1f", battery.powerWatts))W")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+
+                                    Spacer()
+                                }
+                                .padding(12)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .fill(Color.orange.opacity(0.10))
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+                                )
+                                .padding(.bottom, 8)
+                            }
+
+                            // ═══════════════════════════════════════════════════════════
+                            // 区块一：电源与运行控制策略 (全部开关集中排列)
+                            // ═══════════════════════════════════════════════════════════
+
+                            SettingsCard(title: "供电与运行策略") {
+                                SettingsRow("防止空闲睡眠", subtitle: "阻止系统在无人操作时自动进入睡眠") {
                                     Toggle("", isOn: Binding(
                                         get: { self.preventIdleSleep },
                                         set: { newValue in
@@ -483,10 +528,10 @@ struct PreferencesView: View {
                                     .toggleStyle(.switch)
                                     .labelsHidden()
                                 }
-                                
+
                                 Divider().padding(.horizontal, 16)
-                                
-                                SettingsRow("合盖后仍然保持运行状态") {
+
+                                SettingsRow("合盖后仍然保持运行状态", subtitle: "合盖时维持系统活跃，无缝充当常驻服务器") {
                                     Toggle("", isOn: Binding(
                                         get: { self.keepRunningOnLidClose },
                                         set: { newValue in
@@ -498,7 +543,189 @@ struct PreferencesView: View {
                                     .labelsHidden()
                                 }
                             }
-                            
+
+                            SettingsCard(title: "长期插电防鼓包养护 (Charge Limit)") {
+                                SettingsRow("启用充电上限保护", subtitle: "到达指定上限后暂停充电，延缓电池高压与长期发热鼓包") {
+                                    HStack(spacing: 8) {
+                                        Toggle("", isOn: $battery.customLimitEnabled)
+                                            .toggleStyle(.switch)
+                                            .labelsHidden()
+                                    }
+                                }
+
+                                if battery.customLimitEnabled {
+                                    Divider().padding(.horizontal, 16)
+
+                                    SettingsRow("充电上限阈值", subtitle: "达到 \(battery.customLimitThreshold)% 时停止充电，降至 \(max(20, battery.customLimitThreshold - 5))% 时恢复补电 (Sailing Mode)") {
+                                        HStack(spacing: 10) {
+                                            Slider(value: Binding(
+                                                get: { Double(self.battery.customLimitThreshold) },
+                                                set: { self.battery.customLimitThreshold = Int($0) }
+                                            ), in: 50...90, step: 5)
+                                            .frame(width: 130)
+
+                                            Text("\(battery.customLimitThreshold)%")
+                                                .font(.system(.body, design: .rounded))
+                                                .fontWeight(.bold)
+                                                .frame(width: 38, alignment: .trailing)
+                                        }
+                                    }
+
+                                    Divider().padding(.horizontal, 16)
+
+                                    SettingsRow("底层 SMC 控充权限", subtitle: battery.isPrivilegedHelperConfigured ? "已建立静默控充通道，后台控充时无需反复输入密码" : "老系统自主截断充电电流需配置免密权限 (仅需授权一次)") {
+                                        HStack(spacing: 8) {
+                                            if battery.isPrivilegedHelperConfigured {
+                                                Text("已授权 (静默生效)")
+                                                    .font(.system(size: 12, weight: .medium))
+                                                    .foregroundColor(.green)
+
+                                                Button("移除授权") {
+                                                    _ = BatteryManager.shared.removePrivilegedAccess()
+                                                }
+                                                .buttonStyle(.plain)
+                                                .foregroundColor(.secondary)
+                                                .font(.system(size: 11))
+                                            } else {
+                                                Button("配置免密授权 (仅需一次)...") {
+                                                    _ = BatteryManager.shared.requestPrivilegedAccess()
+                                                }
+                                                .buttonStyle(.plain)
+                                                .foregroundColor(.accentColor)
+                                                .font(.system(size: 12, weight: .medium))
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Divider().padding(.horizontal, 16)
+
+                                SettingsRow("系统环境与策略模式", subtitle: battery.isSupportedNativeLimit ? "macOS 15+ 具备固件级限充能力" : "老款系统 (macOS 14/13/Intel) 无原生限充，完全依赖 MacHead 自主控制") {
+                                    HStack(spacing: 8) {
+                                        HStack(spacing: 4) {
+                                            Circle()
+                                                .fill(battery.isChargeLimitEnabled ? Color.green : Color.orange)
+                                                .frame(width: 7, height: 7)
+                                            Text(battery.chargeLimitSource)
+                                                .font(.system(size: 12, weight: .medium))
+                                                .foregroundColor(.secondary)
+                                        }
+
+                                        if battery.isSupportedNativeLimit {
+                                            Button("系统设置...") {
+                                                BatteryManager.shared.openSystemBatterySettings()
+                                            }
+                                            .buttonStyle(.plain)
+                                            .foregroundColor(.accentColor)
+                                        }
+                                    }
+                                }
+                            }
+
+                            SettingsCard(title: "断电与休眠保护") {
+                                SettingsRow("启用低电量电池保护", subtitle: "断电且电量低于安全阈值时自动休眠，防止电池过放损坏") {
+                                    HStack(spacing: 12) {
+                                        Toggle("", isOn: Binding(
+                                            get: { self.enableBatteryProtection },
+                                            set: { newValue in
+                                                self.enableBatteryProtection = newValue
+                                                UserDefaults.standard.set(newValue, forKey: "EnableBatteryProtection")
+                                                BatteryManager.shared.handlePowerSourceChanged()
+                                            }
+                                        ))
+                                        .toggleStyle(.switch)
+                                        .labelsHidden()
+
+                                        Button("设定...") {
+                                            self.showBatteryConfig = true
+                                        }
+                                    }
+                                }
+                            }
+
+                            // ═══════════════════════════════════════════════════════════
+                            // 区块二：电池指标与健康监控看板 (全部信息读数集中排列)
+                            // ═══════════════════════════════════════════════════════════
+
+                            SettingsCard(title: "实时电气指标") {
+                                SettingsRow("即时充放电功率") {
+                                    Text(battery.powerWatts > 0 ? String(format: "%.2f W", battery.powerWatts) : (battery.isCharging ? "充电中" : "0.00 W (直供)"))
+                                        .fontWeight(.semibold)
+                                        .foregroundColor(battery.isUPSActive ? .orange : (battery.isCharging ? .green : .primary))
+                                }
+
+                                Divider().padding(.horizontal, 16)
+
+                                SettingsRow("母线电压 / 实时电流") {
+                                    Text(String(format: "%.2f V / %d mA", battery.voltage, battery.amperage))
+                                        .fontWeight(.medium)
+                                }
+
+                                Divider().padding(.horizontal, 16)
+
+                                SettingsRow("外接供电适配器") {
+                                    Text(battery.adapterWatts > 0 ? "\(battery.adapterWatts)W (\(battery.adapterName.isEmpty ? "交流适配器" : battery.adapterName))" : (battery.isUPSActive ? "未连接 (电池供电)" : "外接电源"))
+                                        .fontWeight(.medium)
+                                }
+
+                                Divider().padding(.horizontal, 16)
+
+                                SettingsRow("电源预估状态") {
+                                    Text(battery.timeRemainingFormatted.isEmpty ? "正常运行" : battery.timeRemainingFormatted)
+                                        .fontWeight(.medium)
+                                        .foregroundColor(battery.isUPSActive ? .orange : .secondary)
+                                }
+                            }
+
+                            SettingsCard(title: "电池健康与容量") {
+                                SettingsRow("当前剩余电量") {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: battery.isCharging ? "bolt.batteryblock.fill" : (battery.currentCapacity > 20 ? "battery.100" : "battery.25"))
+                                            .foregroundColor(battery.isCharging ? .green : (battery.currentCapacity > 20 ? .blue : .orange))
+                                        Text("\(battery.currentCapacity)% (\(battery.powerState == "AC Power" ? "外接交流电" : "电池供电"))")
+                                            .fontWeight(.medium)
+                                    }
+                                }
+
+                                Divider().padding(.horizontal, 16)
+
+                                SettingsRow("最大可用容量 (mAh)") {
+                                    if battery.rawMaxCapacity > 0 {
+                                        Text("\(battery.rawCurrentCapacity) / \(battery.rawMaxCapacity) mAh (设计: \(battery.designCapacity) mAh)")
+                                            .fontWeight(.medium)
+                                    } else {
+                                        Text("读取中...")
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+
+                                Divider().padding(.horizontal, 16)
+
+                                SettingsRow("电池健康度 (最大容量)") {
+                                    Text(battery.batteryHealth > 0 ? String(format: "%.1f%%", battery.batteryHealth) : "检测中")
+                                        .fontWeight(.medium)
+                                        .foregroundColor(battery.batteryHealth >= 80 ? .primary : .orange)
+                                }
+
+                                Divider().padding(.horizontal, 16)
+
+                                SettingsRow("充放电循环次数") {
+                                    Text("\(battery.cycleCount) 次")
+                                        .fontWeight(.medium)
+                                }
+
+                                if battery.batteryTemperature > 0 {
+                                    Divider().padding(.horizontal, 16)
+
+                                    SettingsRow("电池包温度") {
+                                        Text(String(format: "%.1f°C", battery.batteryTemperature))
+                                            .fontWeight(.medium)
+                                            .foregroundColor(battery.batteryTemperature > 38 ? .red : .primary)
+                                    }
+                                }
+                            }
+
+                        case .hardware:
                             SettingsCard(title: "输入设备保护") {
                                 SettingsRow("禁用内置键盘") {
                                     HStack(spacing: 16) {
@@ -512,7 +739,7 @@ struct PreferencesView: View {
                                             }
                                         ))
                                         .toggleStyle(.checkbox)
-                                        
+
                                         Toggle("外接键盘下", isOn: Binding(
                                             get: { self.disableKeyboardWhenExtKeyConnected },
                                             set: { newValue in
@@ -525,9 +752,9 @@ struct PreferencesView: View {
                                         .toggleStyle(.checkbox)
                                     }
                                 }
-                                
+
                                 Divider().padding(.horizontal, 16)
-                                
+
                                 SettingsRow("禁用内置触控板") {
                                     HStack(spacing: 16) {
                                         Toggle("无头模式下", isOn: Binding(
@@ -539,7 +766,7 @@ struct PreferencesView: View {
                                             }
                                         ))
                                         .toggleStyle(.checkbox)
-                                        
+
                                         Toggle("外接鼠标下", isOn: Binding(
                                             get: { self.disableTrackpadWhenExtMouseConnected },
                                             set: { newValue in
@@ -551,7 +778,7 @@ struct PreferencesView: View {
                                         .toggleStyle(.checkbox)
                                     }
                                 }
-                                
+
                                 if (disableKeyboardInHeadless || disableKeyboardWhenExtKeyConnected) && !isAccessibilityTrusted {
                                     VStack(alignment: .leading, spacing: 6) {
                                         HStack(spacing: 4) {
@@ -575,36 +802,15 @@ struct PreferencesView: View {
                                     .padding(.bottom, 12)
                                 }
                             }
-                            
-                            SettingsCard(title: "电池保护与睡眠") {
-                                SettingsRow("启用低电量电池保护") {
-                                    HStack(spacing: 12) {
-                                        Toggle("", isOn: Binding(
-                                            get: { self.enableBatteryProtection },
-                                            set: { newValue in
-                                                self.enableBatteryProtection = newValue
-                                                UserDefaults.standard.set(newValue, forKey: "EnableBatteryProtection")
-                                                BatteryManager.shared.handlePowerSourceChanged()
-                                            }
-                                        ))
-                                        .toggleStyle(.switch)
-                                        .labelsHidden()
-                                        
-                                        Button("设定...") {
-                                            self.showBatteryConfig = true
-                                        }
-                                    }
-                                }
-                            }
-                            
+
                             SettingsCard(title: "多媒体设备") {
                                 SettingsRow("内置麦克风状态") {
                                     Text(isMicrophoneMuted ? "已静音 🔇" : "正常 🎙️")
                                         .fontWeight(.medium)
                                 }
-                                
+
                                 Divider().padding(.horizontal, 16)
-                                
+
                                 SettingsRow("无头模式下自动静音内置麦克风") {
                                     Toggle("", isOn: Binding(
                                         get: { self.muteMicrophone },
@@ -1119,15 +1325,15 @@ struct PreferencesView: View {
                         Text("当前电量:")
                             .foregroundColor(.secondary)
                             .frame(width: 90, alignment: .leading)
-                        Text("\(batteryCapacity)%")
+                        Text("\(battery.currentCapacity)%")
                             .fontWeight(.semibold)
                     }
-                    
+
                     HStack {
                         Text("电源状态:")
                             .foregroundColor(.secondary)
                             .frame(width: 90, alignment: .leading)
-                        Text(batteryState == "AC Power" ? "外接电源直供" : "电池供电中")
+                        Text(battery.powerState == "AC Power" ? "外接电源直供" : "电池供电中")
                             .fontWeight(.medium)
                     }
                     
@@ -2470,9 +2676,6 @@ struct PreferencesView: View {
     }
     
     private func updateBatteryState() {
-        self.batteryCapacity = BatteryManager.shared.currentCapacity
-        self.batteryState = BatteryManager.shared.powerState
-        self.isCharging = BatteryManager.shared.isCharging
         self.isMicrophoneMuted = MediaDeviceManager.shared.isMuted
         self.webServerIP = WebServer.shared.getLocalIPAddress()
         self.webServerPassword = UserDefaults.standard.string(forKey: "WebServerPassword") ?? ""

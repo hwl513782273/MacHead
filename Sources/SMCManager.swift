@@ -33,6 +33,7 @@ public final class SMCManager: ObservableObject {
     // SMC parameters
     private static let KERNEL_INDEX_SMC: UInt32 = 2
     private static let kSMCReadKey: UInt8 = 5
+    private static let kSMCWriteKey: UInt8 = 6
     private static let kSMCGetKeyInfo: UInt8 = 9
     
     // Structs for AppleSMC communication
@@ -352,7 +353,64 @@ public final class SMCManager: ObservableObject {
         }
         return nil
     }
-    
+
+    /// 向 SMC 写入数据 (需要特权/root)
+    public func writeKey(key: String, bytes: [UInt8]) -> Bool {
+        guard connection != 0 else { return false }
+        guard let info = getKeyInfo(key: key) else { return false }
+        guard bytes.count <= Int(info.dataSize) else { return false }
+
+        var inputStruct = SMCParamStruct()
+        var outputStruct = SMCParamStruct()
+
+        inputStruct.key = stringToFourCharCode(key)
+        inputStruct.val.dataSize = info.dataSize
+        inputStruct.keyInfo.dataAttributes = info.dataAttributes
+        inputStruct.keyInfo.dataType = info.dataType
+        inputStruct.select = SMCManager.kSMCWriteKey
+
+        var bytesTuple = inputStruct.val.bytes
+        withUnsafeMutableBytes(of: &bytesTuple) { ptr in
+            for i in 0..<bytes.count {
+                ptr[i] = bytes[i]
+            }
+        }
+        inputStruct.val.bytes = bytesTuple
+
+        let size = MemoryLayout<SMCParamStruct>.size
+        var outputSize = size
+
+        let result = IOConnectCallStructMethod(
+            connection,
+            SMCManager.KERNEL_INDEX_SMC,
+            &inputStruct,
+            size,
+            &outputStruct,
+            &outputSize
+        )
+
+        return (result == kIOReturnSuccess && outputStruct.result == 0)
+    }
+
+    /// 设置充电禁止 (针对 Apple Silicon 的 CH0B/CH0C 机制)
+    /// - Parameter inhibited: true 停止充电；false 恢复充电
+    public func setChargingInhibited(_ inhibited: Bool) -> Bool {
+        let val: UInt8 = inhibited ? 1 : 0
+        if writeKey(key: "CH0B", bytes: [val]) {
+            return true
+        }
+        if writeKey(key: "CH0C", bytes: [val]) {
+            return true
+        }
+        return false
+    }
+
+    /// 设置充电上限 (针对 Intel 的 BCLM 机制)
+    public func setBCLMChargeLimit(_ limit: Int) -> Bool {
+        let clamped = UInt8(max(20, min(100, limit)))
+        return writeKey(key: "BCLM", bytes: [clamped])
+    }
+
     // MARK: - Conversions
     
     private func stringToFourCharCode(_ str: String) -> UInt32 {
