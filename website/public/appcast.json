@@ -1,7 +1,7 @@
 {
-  "version": "0.1.21",
-  "build": 25,
-  "pubDate": "2026-09-21",
-  "url": "https://releases.headlessmac.com/MacHead-v0.1.21-macos-universal.dmg",
-  "releaseNotes": "1. 修复断开外屏后内屏无法自动恢复的问题，系统虚拟屏不再被误判为外接显示器；2. 恢复可靠性增强：显示器配置完成后统一决策、失败自动重试、重复操作幂等跳过；3. 偏好设置与菜单栏的外接显示器列表口径统一。"
+  "version": "0.1.22",
+  "build": 26,
+  "pubDate": "2026-09-23",
+  "url": "https://releases.headlessmac.com/MacHead-v0.1.22-macos-universal.dmg",
+  "releaseNotes": "1. 偏好设置新增独立「电池」专区，对齐 macOS 原生设计规范与图标体系；2. 全景电气指标：实时充放电功率 (W)、母线电压/电流、充电头识别、真实容量 (mAh) 与电池包温度；3. MacBook as UPS 智能断电守护：断电自动推算剩余续航倒计时，增强多渠道告警；4. 防鼓包充电上限 (Charge Limit)：支持 50%~90% 调节与 Sailing Mode 回充死区，新老系统双模驱动；5. 静默无感控充：重构特权授权通道，一次性免密配置彻底消除弹窗打扰；6. 远程 Web 控制台同步：支持远程查看实时电气指标并在线调节限充。"
 }
