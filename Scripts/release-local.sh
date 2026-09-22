@@ -6,6 +6,7 @@
 #
 # 前置条件：wrangler 已登录（npx wrangler whoami 可见账号），对 R2 桶 headlessmac-releases 有写权限
 set -euo pipefail
+export NODE_OPTIONS="--dns-result-order=ipv4first ${NODE_OPTIONS:-}"
 cd "$(dirname "$0")/.."
 
 VERSION="${1:?用法: $0 <version> [发布说明] [--no-push]}"
