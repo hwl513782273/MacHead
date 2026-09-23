@@ -1,7 +1,7 @@
 {
-  "version": "0.1.22",
-  "build": 26,
+  "version": "0.1.23",
+  "build": 27,
   "pubDate": "2026-09-23",
-  "url": "https://releases.headlessmac.com/MacHead-v0.1.22-macos-universal.dmg",
-  "releaseNotes": "1. 偏好设置新增独立「电池」专区，对齐 macOS 原生设计规范与图标体系；2. 全景电气指标：实时充放电功率 (W)、母线电压/电流、充电头识别、真实容量 (mAh) 与电池包温度；3. MacBook as UPS 智能断电守护：断电自动推算剩余续航倒计时，增强多渠道告警；4. 防鼓包充电上限 (Charge Limit)：支持 50%~90% 调节与 Sailing Mode 回充死区，新老系统双模驱动；5. 静默无感控充：重构特权授权通道，一次性免密配置彻底消除弹窗打扰；6. 远程 Web 控制台同步：支持远程查看实时电气指标并在线调节限充。"
+  "url": "https://releases.headlessmac.com/MacHead-v0.1.23-macos-universal.dmg",
+  "releaseNotes": "1. 局域网 Web 控制面板支持自定义服务端口，并提供特权端口与范围实时校验；2. 偏好设置面板与快捷菜单栏动态显示并复制自定义端口访问地址；3. Microsoft Dev Tunnels 与 FRP 内网穿透服务规则自动同步自定义 Web 端口；4. 新增 macOS 原生远程管理感知（SSH 22 / VNC 5900 / SMB 445 端口状态）；5. 提供专属快捷命令与一键复制功能（如 ssh user@ip、vnc://ip、smb://ip），并支持一键直达系统共享设置。"
 }
