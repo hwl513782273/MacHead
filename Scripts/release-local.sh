@@ -46,36 +46,36 @@ mkdir -p Resources "${TEMP_DIR}"
 # 探测 GitHub 最新版本号；失败时给出明确错误而非静默退出
 latest_ver() {
   local ver
-  ver=$(curl -sI "https://github.com/$1/releases/latest" | grep -i '^location' | awk -F'/' '{print $NF}' | tr -d '\r\n')
+  ver=$(curl -sI --retry 3 --connect-timeout 10 "https://github.com/$1/releases/latest" | grep -i '^location' | awk -F'/' '{print $NF}' | tr -d '\r\n')
   [ -n "$ver" ] || { echo "错误：无法获取 $1 的最新版本号，请检查网络后重试" >&2; exit 1; }
   echo "$ver"
 }
 
 NEZHA_VER=$(latest_ver nezhahq/agent)
-curl -sL -o "${TEMP_DIR}/nezha_amd64.zip" "https://github.com/nezhahq/agent/releases/download/${NEZHA_VER}/nezha-agent_darwin_amd64.zip"
-curl -sL -o "${TEMP_DIR}/nezha_arm64.zip" "https://github.com/nezhahq/agent/releases/download/${NEZHA_VER}/nezha-agent_darwin_arm64.zip"
+curl -sL --retry 3 --connect-timeout 15 -o "${TEMP_DIR}/nezha_amd64.zip" "https://github.com/nezhahq/agent/releases/download/${NEZHA_VER}/nezha-agent_darwin_amd64.zip"
+curl -sL --retry 3 --connect-timeout 15 -o "${TEMP_DIR}/nezha_arm64.zip" "https://github.com/nezhahq/agent/releases/download/${NEZHA_VER}/nezha-agent_darwin_arm64.zip"
 unzip -oq "${TEMP_DIR}/nezha_amd64.zip" -d "${TEMP_DIR}/nezha_amd64"
 unzip -oq "${TEMP_DIR}/nezha_arm64.zip" -d "${TEMP_DIR}/nezha_arm64"
 lipo -create "${TEMP_DIR}/nezha_amd64/nezha-agent" "${TEMP_DIR}/nezha_arm64/nezha-agent" -output Resources/nezha-agent
 
 STATUS_VER=$(latest_ver zdz/ServerStatus-Rust)
-curl -sL -o "${TEMP_DIR}/status_amd64.zip" "https://github.com/zdz/ServerStatus-Rust/releases/download/${STATUS_VER}/client-x86_64-apple-darwin.zip"
-curl -sL -o "${TEMP_DIR}/status_arm64.zip" "https://github.com/zdz/ServerStatus-Rust/releases/download/${STATUS_VER}/client-aarch64-apple-darwin.zip"
+curl -sL --retry 3 --connect-timeout 15 -o "${TEMP_DIR}/status_amd64.zip" "https://github.com/zdz/ServerStatus-Rust/releases/download/${STATUS_VER}/client-x86_64-apple-darwin.zip"
+curl -sL --retry 3 --connect-timeout 15 -o "${TEMP_DIR}/status_arm64.zip" "https://github.com/zdz/ServerStatus-Rust/releases/download/${STATUS_VER}/client-aarch64-apple-darwin.zip"
 unzip -oq "${TEMP_DIR}/status_amd64.zip" -d "${TEMP_DIR}/status_amd64"
 unzip -oq "${TEMP_DIR}/status_arm64.zip" -d "${TEMP_DIR}/status_arm64"
 lipo -create "${TEMP_DIR}/status_amd64/stat_client" "${TEMP_DIR}/status_arm64/stat_client" -output Resources/serverstatus-client
 
 FRP_VER=$(latest_ver fatedier/frp)
 FRP_RAW_VER="${FRP_VER#v}"
-curl -sL -o "${TEMP_DIR}/frp_amd64.tar.gz" "https://github.com/fatedier/frp/releases/download/${FRP_VER}/frp_${FRP_RAW_VER}_darwin_amd64.tar.gz"
-curl -sL -o "${TEMP_DIR}/frp_arm64.tar.gz" "https://github.com/fatedier/frp/releases/download/${FRP_VER}/frp_${FRP_RAW_VER}_darwin_arm64.tar.gz"
+curl -sL --retry 3 --connect-timeout 15 -o "${TEMP_DIR}/frp_amd64.tar.gz" "https://github.com/fatedier/frp/releases/download/${FRP_VER}/frp_${FRP_RAW_VER}_darwin_amd64.tar.gz"
+curl -sL --retry 3 --connect-timeout 15 -o "${TEMP_DIR}/frp_arm64.tar.gz" "https://github.com/fatedier/frp/releases/download/${FRP_VER}/frp_${FRP_RAW_VER}_darwin_arm64.tar.gz"
 tar -xzf "${TEMP_DIR}/frp_amd64.tar.gz" -C "${TEMP_DIR}"
 tar -xzf "${TEMP_DIR}/frp_arm64.tar.gz" -C "${TEMP_DIR}"
 lipo -create "${TEMP_DIR}/frp_${FRP_RAW_VER}_darwin_amd64/frpc" "${TEMP_DIR}/frp_${FRP_RAW_VER}_darwin_arm64/frpc" -output Resources/frpc
 
 CFD_VER=$(latest_ver cloudflare/cloudflared)
-curl -sL -o "${TEMP_DIR}/cloudflared_amd64.tgz" "https://github.com/cloudflare/cloudflared/releases/download/${CFD_VER}/cloudflared-darwin-amd64.tgz"
-curl -sL -o "${TEMP_DIR}/cloudflared_arm64.tgz" "https://github.com/cloudflare/cloudflared/releases/download/${CFD_VER}/cloudflared-darwin-arm64.tgz"
+curl -sL --retry 3 --connect-timeout 15 -o "${TEMP_DIR}/cloudflared_amd64.tgz" "https://github.com/cloudflare/cloudflared/releases/download/${CFD_VER}/cloudflared-darwin-amd64.tgz"
+curl -sL --retry 3 --connect-timeout 15 -o "${TEMP_DIR}/cloudflared_arm64.tgz" "https://github.com/cloudflare/cloudflared/releases/download/${CFD_VER}/cloudflared-darwin-arm64.tgz"
 # 两个压缩包内层文件同名，必须分目录解压后再合并
 mkdir -p "${TEMP_DIR}/cfd_amd64" "${TEMP_DIR}/cfd_arm64"
 tar -xzf "${TEMP_DIR}/cloudflared_amd64.tgz" -C "${TEMP_DIR}/cfd_amd64"
@@ -134,7 +134,7 @@ fi
 
 # ── 6. 部署官网（appcast.json 随官网静态资源下发，Pages Git 集成失效时必须直传）──
 echo "==> [6/6] 部署官网 (发布 appcast) ..."
-(cd website && npm run build >/dev/null && npx wrangler pages deploy >/dev/null && echo "    官网已部署")
+(cd website && npm run build >/dev/null && npx wrangler pages deploy dist --branch=main >/dev/null && echo "    官网已部署")
 
 echo ""
 echo "✅ 发布完成：${TAG} (build ${BUILD})"
