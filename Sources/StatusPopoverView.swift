@@ -149,16 +149,16 @@ struct StatusPopoverView: View {
                                 .font(.system(size: 11, weight: .semibold))
                                 .foregroundColor(.secondary)
                         }
-                        Text("http://\(webServerIP):8080")
+                        Text(verbatim: "http://\(webServerIP):\(WebServer.shared.portString)")
                             .font(.system(size: 11, weight: .medium, design: .monospaced))
                             .foregroundColor(.primary)
                             .lineLimit(1)
                     }
-                    
+
                     Spacer()
-                    
+
                     Button(action: {
-                        let urlStr = "http://\(webServerIP):8080"
+                        let urlStr = "http://\(webServerIP):\(WebServer.shared.portString)"
                         NSPasteboard.general.clearContents()
                         NSPasteboard.general.setString(urlStr, forType: .string)
                         copiedServerInfo = true
@@ -214,9 +214,16 @@ struct StatusPopoverView: View {
         .frame(width: 330)
         .fixedSize(horizontal: false, vertical: true)
         .animation(.easeInOut(duration: 0.15), value: isHeadless)
+        .onAppear {
+            self.webServerIP = WebServer.shared.getLocalIPAddress()
+        }
         .onReceive(NotificationCenter.default.publisher(for: .headlessModeStateChanged)) { _ in
             self.isHeadless = HeadlessModeController.shared.isHeadlessModeEnabled
             self.externalDisplaysCount = HeadlessModeController.shared.currentExternalDisplays().count
+            self.webServerIP = WebServer.shared.getLocalIPAddress()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .webServerStateChanged)) { _ in
+            self.webServerIP = WebServer.shared.getLocalIPAddress()
         }
     }
 

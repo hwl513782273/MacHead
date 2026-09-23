@@ -95,7 +95,7 @@ public final class DevTunnelService {
         }
         
         let defaultRules = [
-            DevTunnelPortRule(name: "MacHead Web 控制台", port: "8080", protocolType: "http", isEnabled: true),
+            DevTunnelPortRule(name: "MacHead Web 控制台", port: "\(WebServer.shared.currentPort)", protocolType: "http", isEnabled: true),
             DevTunnelPortRule(name: "SSH 远程登录", port: "22", protocolType: "auto", isEnabled: true)
         ]
         savePortRules(defaultRules)
@@ -398,7 +398,7 @@ public final class DevTunnelService {
         // Multi-port forwarding from custom rules
         let rules = DevTunnelService.loadPortRules().filter { $0.isEnabled && !$0.port.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         if rules.isEmpty {
-            args.append(contentsOf: ["-p", "8080"])
+            args.append(contentsOf: ["-p", "\(WebServer.shared.currentPort)"])
         } else {
             for rule in rules {
                 let cleanPort = rule.port.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -489,7 +489,8 @@ public final class DevTunnelService {
         }
         
         if !self.activePortUrls.isEmpty {
-            let web = self.activePortUrls["8080"] ?? self.activePortUrls.values.first ?? ""
+            let webPort = "\(WebServer.shared.currentPort)"
+            let web = self.activePortUrls[webPort] ?? self.activePortUrls["8080"] ?? self.activePortUrls.values.first ?? ""
             self.currentStatus = .connected(webUrl: web, sshUrl: self.activePortUrls["22"])
         }
         
@@ -525,7 +526,7 @@ public final class DevTunnelService {
         
         let activeRules = rules.filter { $0.isEnabled && !$0.port.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         if activeRules.isEmpty {
-            args.append(contentsOf: ["-p", "8080"])
+            args.append(contentsOf: ["-p", "\(WebServer.shared.currentPort)"])
         } else {
             for rule in activeRules {
                 let cleanPort = rule.port.trimmingCharacters(in: .whitespacesAndNewlines)

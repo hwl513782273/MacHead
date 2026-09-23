@@ -2,62 +2,95 @@ import Foundation
 import Network
 import SystemConfiguration
 
-
+extension Notification.Name {
+    public static let webServerStateChanged = Notification.Name("com.waffle.MacHead.webServerStateChanged")
+}
 
 final class WebServer {
     static let shared = WebServer()
-    
+    static let defaultPort: UInt16 = 8080
+
+    var currentPort: UInt16 {
+        let stored = UserDefaults.standard.integer(forKey: "WebServerPort")
+        if stored >= 1 && stored <= 65535 {
+            return UInt16(stored)
+        }
+        return Self.defaultPort
+    }
+
+    var portString: String {
+        return String(currentPort)
+    }
+
+    var isRunning: Bool {
+        return listener != nil
+    }
+
     private let sessionToken = "MacHeadSession-\(UUID().uuidString)"
-    
+
     private var listener: NWListener?
     private var lastCPUInfo: processor_info_array_t?
     private var lastCPUInfoCount: mach_msg_type_number_t = 0
-    
+
     private var lastNetworkTime: Date?
     private var lastInboundBytes: UInt64 = 0
     private var lastOutboundBytes: UInt64 = 0
-    
+
     private init() {}
-    
+
     func start() {
         let enableWebServer = UserDefaults.standard.bool(forKey: "EnableWebServer")
         guard enableWebServer else { return }
         guard listener == nil else { return }
-        
-        guard let port = NWEndpoint.Port(rawValue: 8080) else { return }
-        
+
+        let portNumber = currentPort
+        guard let port = NWEndpoint.Port(rawValue: portNumber) else { return }
+
         do {
             let newListener = try NWListener(using: .tcp, on: port)
             self.listener = newListener
-            
-            newListener.stateUpdateHandler = { state in
+
+            newListener.stateUpdateHandler = { [weak self] state in
                 switch state {
                 case .ready:
-                    NSLog("MacHead: Web 服务器启动就绪，端口: 8080")
+                    NSLog("MacHead: Web 服务器启动就绪，端口: %d", portNumber)
+                    DispatchQueue.main.async {
+                        NotificationCenter.default.post(name: .webServerStateChanged, object: nil)
+                    }
                 case .failed(let error):
                     NSLog("MacHead: Web 服务器失败: %@", error.localizedDescription)
-                    self.stop()
+                    self?.stop()
                 default:
                     break
                 }
             }
-            
-            newListener.newConnectionHandler = { connection in
+
+            newListener.newConnectionHandler = { [weak self] connection in
                 connection.start(queue: .main)
-                self.handleConnection(connection)
+                self?.handleConnection(connection)
             }
-            
+
             newListener.start(queue: .main)
         } catch {
             NSLog("MacHead: 无法启动 Web 服务器: %@", error.localizedDescription)
         }
     }
-    
+
     func stop() {
         if let activeListener = listener {
             activeListener.cancel()
             listener = nil
             NSLog("MacHead: Web 服务器已关闭")
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: .webServerStateChanged, object: nil)
+            }
+        }
+    }
+
+    func restart() {
+        stop()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+            self?.start()
         }
     }
     
@@ -445,6 +478,7 @@ final class WebServer {
 
         return """
         {
+          "webServerPort": \(currentPort),
           "headlessModeEnabled": \(HeadlessModeController.shared.isHeadlessModeEnabled),
           "preventIdleSleep": \(UserDefaults.standard.bool(forKey: "PreventIdleSleep")),
           "keepRunningOnLidClose": \(UserDefaults.standard.bool(forKey: "KeepRunningOnLidClose")),
@@ -495,7 +529,11 @@ final class WebServer {
           "frpRunning": \(FrpService.shared.isRunning()),
           "cloudflareEnabled": \(UserDefaults.standard.bool(forKey: "cloudflareEnabled")),
           "cloudflareStatus": "\(CloudflareService.shared.currentStatus.displayText)",
-          "cloudflareToken": "\(UserDefaults.standard.string(forKey: "cloudflareToken") ?? "")"
+          "cloudflareToken": "\(UserDefaults.standard.string(forKey: "cloudflareToken") ?? "")",
+          "sshEnabled": \(RemoteSharingService.shared.isSSHRunning),
+          "vncEnabled": \(RemoteSharingService.shared.isVNCRunning),
+          "smbEnabled": \(RemoteSharingService.shared.isSMBRunning),
+          "systemUser": "\(RemoteSharingService.shared.currentUser)"
         }
         """
     }

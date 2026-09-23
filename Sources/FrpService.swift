@@ -100,12 +100,13 @@ public final class FrpService {
             subdomain: legacySubdomain
         )
         
+        let defaultWebPort = "\(WebServer.shared.currentPort)"
         let rule2 = FrpProxyRule(
             name: "machead-web",
             type: "tcp",
             localIP: "127.0.0.1",
-            localPort: "8080",
-            remotePort: "8080"
+            localPort: defaultWebPort,
+            remotePort: defaultWebPort
         )
         
         let defaultRules = [rule1, rule2]

@@ -145,11 +145,15 @@ struct PreferencesView: View {
     @State private var enableWebServer = UserDefaults.standard.bool(forKey: "EnableWebServer")
     @State private var webServerIP = WebServer.shared.getLocalIPAddress()
     @State private var webServerPassword = UserDefaults.standard.string(forKey: "WebServerPassword") ?? ""
+    @State private var webServerPort = String(WebServer.shared.currentPort)
     @State private var isAccessibilityTrusted = AXIsProcessTrusted()
 
     // Hardware & Battery metrics watchers
     @ObservedObject private var smc = SMCManager.shared
     @ObservedObject private var battery = BatteryManager.shared
+    @ObservedObject private var remoteSharing = RemoteSharingService.shared
+
+    @State private var copiedServiceHint: String? = nil
 
     @State private var nezhaEnabled = UserDefaults.standard.bool(forKey: "nezhaEnabled")
     @State private var nezhaServer = UserDefaults.standard.string(forKey: "nezhaServer") ?? ""
@@ -464,14 +468,108 @@ struct PreferencesView: View {
                                         ))
                                         .toggleStyle(.switch)
                                         .labelsHidden()
-                                        
+
                                         Button("设定...") {
+                                            self.webServerPort = String(WebServer.shared.currentPort)
+                                            self.webServerIP = WebServer.shared.getLocalIPAddress()
                                             self.showWebServerConfig = true
                                         }
                                     }
                                 }
+
+                                if enableWebServer {
+                                    SettingsRow("访问地址") {
+                                        HStack(spacing: 8) {
+                                            Text(verbatim: "http://\(webServerIP):\(WebServer.shared.portString)")
+                                                .font(.system(.caption, design: .monospaced))
+                                                .foregroundColor(.accentColor)
+                                                .textSelection(.enabled)
+
+                                            Button(action: {
+                                                let urlStr = "http://\(webServerIP):\(WebServer.shared.portString)"
+                                                NSPasteboard.general.clearContents()
+                                                NSPasteboard.general.setString(urlStr, forType: .string)
+                                            }) {
+                                                Image(systemName: "doc.on.doc")
+                                                    .font(.caption)
+                                            }
+                                            .buttonStyle(.borderless)
+                                            .help("复制访问地址")
+                                        }
+                                    }
+                                }
                             }
-                            
+
+                            SettingsCard(title: "macOS 原生远程管理感知") {
+                                SettingsRow("SSH 远程登录", subtitle: "端口 22 · 字符终端") {
+                                    HStack(spacing: 8) {
+                                        serviceStatusBadge(isActive: remoteSharing.isSSHRunning)
+
+                                        if remoteSharing.isSSHRunning {
+                                            Text(verbatim: remoteSharing.sshCommand)
+                                                .font(.system(.caption, design: .monospaced))
+                                                .foregroundColor(.accentColor)
+                                                .textSelection(.enabled)
+
+                                            copyButton(for: remoteSharing.sshCommand, serviceKey: "ssh")
+                                        }
+                                    }
+                                }
+
+                                Divider().padding(.horizontal, 16)
+
+                                SettingsRow("屏幕共享 (VNC)", subtitle: "端口 5900 · 远程桌面") {
+                                    HStack(spacing: 8) {
+                                        serviceStatusBadge(isActive: remoteSharing.isVNCRunning)
+
+                                        if remoteSharing.isVNCRunning {
+                                            Text(verbatim: remoteSharing.vncURL)
+                                                .font(.system(.caption, design: .monospaced))
+                                                .foregroundColor(.accentColor)
+                                                .textSelection(.enabled)
+
+                                            copyButton(for: remoteSharing.vncURL, serviceKey: "vnc")
+                                        }
+                                    }
+                                }
+
+                                Divider().padding(.horizontal, 16)
+
+                                SettingsRow("文件共享 (SMB)", subtitle: "端口 445 · 局域网访达与文件挂载") {
+                                    HStack(spacing: 8) {
+                                        serviceStatusBadge(isActive: remoteSharing.isSMBRunning)
+
+                                        if remoteSharing.isSMBRunning {
+                                            Text(verbatim: remoteSharing.smbURL)
+                                                .font(.system(.caption, design: .monospaced))
+                                                .foregroundColor(.accentColor)
+                                                .textSelection(.enabled)
+
+                                            copyButton(for: remoteSharing.smbURL, serviceKey: "smb")
+                                        }
+                                    }
+                                }
+
+                                Divider().padding(.horizontal, 16)
+
+                                SettingsRow("系统共享管理", subtitle: "开启或关闭服务请前往 macOS 系统设置") {
+                                    HStack(spacing: 8) {
+                                        Button(action: {
+                                            remoteSharing.refresh()
+                                        }) {
+                                            Image(systemName: "arrow.clockwise")
+                                                .font(.caption)
+                                        }
+                                        .buttonStyle(.borderless)
+                                        .help("刷新端口监听状态")
+
+                                        Button("配置系统共享...") {
+                                            remoteSharing.openSystemSharingSettings()
+                                        }
+                                    }
+                                }
+                            }
+
                         case .power:
                             if battery.isUPSActive {
                                 HStack(spacing: 12) {
@@ -1270,12 +1368,12 @@ struct PreferencesView: View {
                 Text("局域网 Web 控制面板配置")
                     .font(.headline)
                     .fontWeight(.bold)
-                
-                VStack(alignment: .leading, spacing: 10) {
+
+                VStack(alignment: .leading, spacing: 12) {
                     HStack {
                         Text("管理密码:")
                             .foregroundColor(.secondary)
-                            .frame(width: 80, alignment: .leading)
+                            .frame(width: 75, alignment: .leading)
                         TextField("设置密码", text: Binding(
                             get: { self.webServerPassword },
                             set: { newValue in
@@ -1284,33 +1382,69 @@ struct PreferencesView: View {
                             }
                         ))
                         .textFieldStyle(.roundedBorder)
-                        .frame(width: 180)
+                        .frame(width: 190)
                     }
-                    
+
+                    HStack(alignment: .top) {
+                        Text("服务端口:")
+                            .foregroundColor(.secondary)
+                            .frame(width: 75, alignment: .leading)
+                            .padding(.top, 4)
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            TextField("8080", text: $webServerPort)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 190)
+                                .onChange(of: webServerPort) { newValue in
+                                    let filtered = newValue.filter { "0123456789".contains($0) }
+                                    if filtered != newValue {
+                                        self.webServerPort = filtered
+                                    }
+                                }
+                                .onSubmit {
+                                    commitWebServerPort()
+                                }
+
+                            if let portVal = Int(webServerPort), portVal > 0 && portVal < 1024 {
+                                Text("小于 1024 的特权端口可能需要 root 权限")
+                                    .font(.caption2)
+                                    .foregroundColor(.orange)
+                            } else if let portVal = Int(webServerPort), portVal > 65535 {
+                                Text("端口超出有效范围 (1 - 65535)")
+                                    .font(.caption2)
+                                    .foregroundColor(.red)
+                            }
+                        }
+                    }
+
                     HStack {
                         Text("访问地址:")
                             .foregroundColor(.secondary)
-                            .frame(width: 80, alignment: .leading)
-                        Text("http://\(webServerIP):8080")
+                            .frame(width: 75, alignment: .leading)
+                        Text(verbatim: "http://\(webServerIP):\(displayWebServerPort)")
                             .font(.system(.body, design: .monospaced))
                             .foregroundColor(.accentColor)
                             .textSelection(.enabled)
                     }
                 }
-                .padding(.vertical, 8)
-                
+                .padding(.vertical, 4)
+
                 Spacer()
-                
+
                 HStack {
                     Spacer()
                     Button("完成") {
+                        commitWebServerPort()
                         self.showWebServerConfig = false
                     }
                     .keyboardShortcut(.defaultAction)
                 }
             }
             .padding(20)
-            .frame(width: 380, height: 180)
+            .frame(width: 400, height: 235)
+            .onDisappear {
+                commitWebServerPort()
+            }
         }
         
         // ------------------ 电池休眠保护配置弹窗 ------------------
@@ -2642,6 +2776,7 @@ struct PreferencesView: View {
         .onAppear {
             updateConnectedDisplays()
             updateBatteryState()
+            remoteSharing.refresh()
         }
         .onReceive(NotificationCenter.default.publisher(for: .headlessModeStateChanged)) { _ in
             updateConnectedDisplays()
@@ -2670,14 +2805,20 @@ struct PreferencesView: View {
                 self.nezhaStatus = status
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .webServerStateChanged)) { _ in
+            self.webServerIP = WebServer.shared.getLocalIPAddress()
+            self.webServerPort = String(WebServer.shared.currentPort)
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             self.isAccessibilityTrusted = AXIsProcessTrusted()
+            self.remoteSharing.refresh()
         }
     }
-    
+
     private func updateBatteryState() {
         self.isMicrophoneMuted = MediaDeviceManager.shared.isMuted
         self.webServerIP = WebServer.shared.getLocalIPAddress()
+        self.webServerPort = String(WebServer.shared.currentPort)
         self.webServerPassword = UserDefaults.standard.string(forKey: "WebServerPassword") ?? ""
         self.isAccessibilityTrusted = AXIsProcessTrusted()
         
@@ -2750,6 +2891,68 @@ struct PreferencesView: View {
             }
             return DisplayInfo(id: id, name: name, isBuiltIn: isBuiltIn, isApple: isApple)
         }
+    }
+
+    private var displayWebServerPort: String {
+        if let portNum = Int(webServerPort), portNum >= 1 && portNum <= 65535 {
+            return String(portNum)
+        }
+        return WebServer.shared.portString
+    }
+
+    private func commitWebServerPort() {
+        let trimmed = webServerPort.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let portNum = Int(trimmed), portNum >= 1 && portNum <= 65535 {
+            let oldPort = UserDefaults.standard.integer(forKey: "WebServerPort")
+            if oldPort != portNum {
+                UserDefaults.standard.set(portNum, forKey: "WebServerPort")
+                if enableWebServer {
+                    WebServer.shared.restart()
+                }
+            }
+        } else {
+            let current = WebServer.shared.currentPort
+            webServerPort = "\(current)"
+            UserDefaults.standard.set(Int(current), forKey: "WebServerPort")
+        }
+        self.webServerIP = WebServer.shared.getLocalIPAddress()
+    }
+
+    @ViewBuilder
+    private func serviceStatusBadge(isActive: Bool) -> some View {
+        HStack(spacing: 4) {
+            Circle()
+                .fill(isActive ? Color.green : Color.gray)
+                .frame(width: 6, height: 6)
+            Text(isActive ? "已监听" : "未开启")
+                .font(.caption2)
+                .fontWeight(.medium)
+                .foregroundColor(isActive ? .green : .secondary)
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 3)
+        .background((isActive ? Color.green : Color.gray).opacity(0.12))
+        .cornerRadius(5)
+    }
+
+    @ViewBuilder
+    private func copyButton(for text: String, serviceKey: String) -> some View {
+        Button(action: {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
+            copiedServiceHint = serviceKey
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                if self.copiedServiceHint == serviceKey {
+                    self.copiedServiceHint = nil
+                }
+            }
+        }) {
+            Image(systemName: copiedServiceHint == serviceKey ? "checkmark" : "doc.on.doc")
+                .font(.caption)
+                .foregroundColor(copiedServiceHint == serviceKey ? .green : .secondary)
+        }
+        .buttonStyle(.borderless)
+        .help("复制连接链接")
     }
 }
 

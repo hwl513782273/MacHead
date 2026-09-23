@@ -502,6 +502,38 @@
                     text-align: right;
                     font-weight: 500;
                 }
+
+                .service-badge {
+                    font-size: 11px;
+                    padding: 2px 7px;
+                    border-radius: 4px;
+                    font-weight: 500;
+                }
+                .service-badge.active {
+                    background: rgba(66, 184, 131, 0.15);
+                    color: #42b883;
+                }
+                .service-badge.inactive {
+                    background: rgba(150, 150, 150, 0.15);
+                    color: var(--text-muted);
+                }
+                .copy-inline-btn {
+                    background: transparent;
+                    border: 1px solid var(--border-color);
+                    color: var(--accent);
+                    cursor: pointer;
+                    font-size: 11px;
+                    padding: 3px 8px;
+                    border-radius: 4px;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 4px;
+                    transition: all 0.15s ease;
+                }
+                .copy-inline-btn:hover {
+                    background: rgba(0, 122, 255, 0.1);
+                    border-color: var(--accent);
+                }
             
 
 
@@ -753,8 +785,42 @@
                         </table>
                     </div>
                 </div>
-                
-                
+
+                <div class="grid">
+                    <!-- Native Remote Services Card -->
+                    <div class="card" style="grid-column: 1 / -1;">
+                        <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
+                            <span>macOS 原生远程管理感知</span>
+                            <span style="font-size:11px; font-weight:normal; color:var(--text-muted);">系统原生服务 · 局域网即连</span>
+                        </div>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; margin-top: 10px;">
+                            <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px;">
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 6px;">
+                                    <span style="font-weight:600; font-size:13px;">SSH 远程登录</span>
+                                    <span id="ssh-badge" class="service-badge inactive">未开启</span>
+                                </div>
+                                <div style="font-size:11px; color:var(--text-muted); margin-bottom: 8px;">端口 22 · 字符终端</div>
+                                <div id="ssh-action-area" style="font-size:12px; font-family:var(--font-mono); color:var(--text-primary); word-break:break-all;">--</div>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px;">
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 6px;">
+                                    <span style="font-weight:600; font-size:13px;">屏幕共享 (VNC)</span>
+                                    <span id="vnc-badge" class="service-badge inactive">未开启</span>
+                                </div>
+                                <div style="font-size:11px; color:var(--text-muted); margin-bottom: 8px;">端口 5900 · 远程桌面</div>
+                                <div id="vnc-action-area" style="font-size:12px; font-family:var(--font-mono); color:var(--text-primary); word-break:break-all;">--</div>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px;">
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 6px;">
+                                    <span style="font-weight:600; font-size:13px;">文件共享 (SMB)</span>
+                                    <span id="smb-badge" class="service-badge inactive">未开启</span>
+                                </div>
+                                <div style="font-size:11px; color:var(--text-muted); margin-bottom: 8px;">端口 445 · 局域网访达与文件挂载</div>
+                                <div id="smb-action-area" style="font-size:12px; font-family:var(--font-mono); color:var(--text-primary); word-break:break-all;">--</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
                 <div class="grid">
                     <!-- Controls Card -->
@@ -1311,6 +1377,85 @@
                         `;
                         alertBox.appendChild(div);
                     });
+
+                    // Native Remote Services perception
+                    renderNativeServices(data);
+                }
+
+                function copyText(text, btn) {
+                    if (navigator.clipboard) {
+                        navigator.clipboard.writeText(text).then(() => {
+                            const original = btn.innerText;
+                            btn.innerText = '已复制!';
+                            btn.style.color = '#42b883';
+                            setTimeout(() => {
+                                btn.innerText = original;
+                                btn.style.color = '';
+                            }, 1800);
+                        });
+                    }
+                }
+
+                function renderNativeServices(data) {
+                    const host = window.location.hostname || '127.0.0.1';
+                    const user = data.systemUser || 'user';
+
+                    // SSH
+                    const sshBadge = document.getElementById('ssh-badge');
+                    const sshArea = document.getElementById('ssh-action-area');
+                    if (sshBadge && sshArea) {
+                        if (data.sshEnabled) {
+                            sshBadge.className = 'service-badge active';
+                            sshBadge.innerText = '已监听';
+                            const cmd = `ssh ${user}@${host}`;
+                            sshArea.innerHTML = `<div style="display:flex; justify-content:space-between; align-items:center;">
+                                <span style="font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:6px;">${cmd}</span>
+                                <button class="copy-inline-btn" onclick="copyText('${cmd}', this)">复制</button>
+                            </div>`;
+                        } else {
+                            sshBadge.className = 'service-badge inactive';
+                            sshBadge.innerText = '未开启';
+                            sshArea.innerHTML = `<span style="color:var(--text-muted); font-size:11px;">未在系统共享中启用远程登录</span>`;
+                        }
+                    }
+
+                    // VNC
+                    const vncBadge = document.getElementById('vnc-badge');
+                    const vncArea = document.getElementById('vnc-action-area');
+                    if (vncBadge && vncArea) {
+                        if (data.vncEnabled) {
+                            vncBadge.className = 'service-badge active';
+                            vncBadge.innerText = '已监听';
+                            const url = `vnc://${host}`;
+                            vncArea.innerHTML = `<div style="display:flex; justify-content:space-between; align-items:center;">
+                                <span style="font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:6px;">${url}</span>
+                                <button class="copy-inline-btn" onclick="copyText('${url}', this)">复制</button>
+                            </div>`;
+                        } else {
+                            vncBadge.className = 'service-badge inactive';
+                            vncBadge.innerText = '未开启';
+                            vncArea.innerHTML = `<span style="color:var(--text-muted); font-size:11px;">未在系统共享中启用屏幕共享</span>`;
+                        }
+                    }
+
+                    // SMB
+                    const smbBadge = document.getElementById('smb-badge');
+                    const smbArea = document.getElementById('smb-action-area');
+                    if (smbBadge && smbArea) {
+                        if (data.smbEnabled) {
+                            smbBadge.className = 'service-badge active';
+                            smbBadge.innerText = '已监听';
+                            const url = `smb://${host}`;
+                            smbArea.innerHTML = `<div style="display:flex; justify-content:space-between; align-items:center;">
+                                <span style="font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:6px;">${url}</span>
+                                <button class="copy-inline-btn" onclick="copyText('${url}', this)">复制</button>
+                            </div>`;
+                        } else {
+                            smbBadge.className = 'service-badge inactive';
+                            smbBadge.innerText = '未开启';
+                            smbArea.innerHTML = `<span style="color:var(--text-muted); font-size:11px;">未在系统共享中启用文件共享</span>`;
+                        }
+                    }
                 }
 
                 async function toggleSetting(type) {

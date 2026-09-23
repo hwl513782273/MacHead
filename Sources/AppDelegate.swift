@@ -24,6 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             "BatteryThreshold": 20,
             "MuteMicrophoneInHeadlessMode": false,
             "EnableWebServer": false,
+            "WebServerPort": 8080,
             "DisableKeyboardAndTrackpadInHeadlessMode": false,
             "AutoExitHeadlessOnDisconnect": true,
             "AutoRestoreHeadlessOnConnect": true,
