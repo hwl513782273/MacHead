@@ -517,6 +517,18 @@ document.addEventListener('DOMContentLoaded', () => {
     // 7. Landing Page Changelog Minimalist Feed Renderer (No Download Buttons)
     const CHANGELOG_DATA = [
         {
+            version: "0.1.23",
+            date: "2026-09-23",
+            title: "Web 控制台自定义端口与原生远程管理状态感知",
+            bullets: [
+                "局域网 Web 控制面板支持自定义服务端口，并提供特权端口与范围实时校验提示。",
+                "偏好设置面板与快捷菜单栏动态显示实际运行的访问地址与一键复制链接。",
+                "Microsoft Dev Tunnels 与 FRP 内网穿透服务规则自动联动同步自定义 Web 端口。",
+                "新增 macOS 原生远程管理感知：秒级检测本机 SSH (22)、屏幕共享 VNC (5900)、文件共享 SMB (445) 服务端口状态。",
+                "提供专属快捷命令与一键复制功能（如 ssh user@ip、vnc://ip、smb://ip），并支持一键直达系统共享设置面板。"
+            ]
+        },
+        {
             version: "0.1.22",
             date: "2026-09-23",
             title: "全景电池管理、智能 UPS 守护与防鼓包限充",
