@@ -12,7 +12,7 @@
 
 <p align="center">
   <a href="https://headlessmac.com"><img src="https://img.shields.io/badge/官网-headlessmac.com-blue.svg" alt="Website" /></a>
-  <img src="https://img.shields.io/badge/platform-macOS%2013.0%2B-blue.svg" alt="Platform: macOS 13.0+" />
+  <img src="https://img.shields.io/badge/platform-macOS%2012.0%2B-blue.svg" alt="Platform: macOS 12.0+" />
   <img src="https://img.shields.io/badge/arch-Apple%20Silicon%20%7C%20Intel-orange.svg" alt="Architecture: Apple Silicon | Intel" />
   <img src="https://img.shields.io/github/v/release/ox01024/MacHead" alt="Release" />
   <img src="https://img.shields.io/badge/license-Apache%202.0-green.svg" alt="License: Apache 2.0" />
@@ -43,7 +43,7 @@
 
 **方式一：官网下载（推荐，始终最新）**
 
-前往 [headlessmac.com](https://headlessmac.com) 下载 DMG 镜像，双击打开后将 MacHead 拖入「应用程序」文件夹即可。支持 macOS 13.0+，Apple Silicon 与 Intel 通用。安装后的新版本通过自动更新静默推送，无需手动重装。
+前往 [headlessmac.com](https://headlessmac.com) 下载 DMG 镜像，双击打开后将 MacHead 拖入「应用程序」文件夹即可。支持 macOS 12.0+（Monterey 及以上），Apple Silicon 与 Intel 通用。安装后的新版本通过自动更新静默推送，无需手动重装。
 
 **方式二：GitHub Releases**
 

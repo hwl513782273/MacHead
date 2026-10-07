@@ -24,7 +24,7 @@ echo "Using SDK: ${SDK_PATH}"
 # Compile for Apple Silicon (arm64)
 echo "Compiling for arm64 (Apple Silicon)..."
 swiftc \
-  -target arm64-apple-macos13.0 \
+  -target arm64-apple-macos12.0 \
   -sdk "${SDK_PATH}" \
   -O \
   -o "${MACOS_DIR}/${APP_NAME}_arm64" \
@@ -38,7 +38,7 @@ swiftc \
 # Compile for Intel (x86_64)
 echo "Compiling for x86_64 (Intel)..."
 swiftc \
-  -target x86_64-apple-macos13.0 \
+  -target x86_64-apple-macos12.0 \
   -sdk "${SDK_PATH}" \
   -O \
   -o "${MACOS_DIR}/${APP_NAME}_x86_64" \

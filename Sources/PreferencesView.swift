@@ -350,16 +350,25 @@ struct PreferencesView: View {
                 .padding(.bottom, 16)
                 
                 // Sidebar List with native highlights and selection capsule
-                List(selection: $selectedTab) {
+                // macOS 12 兼容:单值 selection 重载需 macOS 13+,统一走 Set 绑定的跨版本重载
+                let sidebarList = List(selection: Binding(
+                    get: { Set([selectedTab]) },
+                    set: { selectedTab = $0.first ?? selectedTab }
+                )) {
                     ForEach(PreferenceTab.allCases) { tab in
                         HStack(spacing: 8) {
                             Image(systemName: tab.iconName)
                                 .font(.system(size: 11, weight: .semibold))
                                 .foregroundColor(.white)
                                 .frame(width: 20, height: 20)
-                                .background(tab.iconColor.gradient)
+                                // macOS 12 兼容:Color.gradient 需 macOS 13,用 LinearGradient(colors:) 等价实现
+                                .background(LinearGradient(
+                                    colors: [tab.iconColor, tab.iconColor.opacity(0.75)],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                ))
                                 .cornerRadius(5)
-                            
+
                             Text(tab.title)
                                 .font(.body)
                         }
@@ -368,7 +377,12 @@ struct PreferencesView: View {
                     }
                 }
                 .listStyle(.sidebar)
-                .scrollContentBackground(.hidden)
+                if #available(macOS 13.0, *) {
+                    sidebarList.scrollContentBackground(.hidden)
+                } else {
+                    // macOS 12 的 sidebar List 自带半透明材质,保持默认背景即可
+                    sidebarList
+                }
                 
                 Spacer()
                 
@@ -2525,8 +2539,7 @@ struct PreferencesView: View {
                                         Image(systemName: "plus.circle.fill")
                                         Text("添加隧道规则")
                                     }
-                                    .font(.caption)
-                                    .fontWeight(.medium)
+                                    .font(.caption.weight(.medium))
                                 }
                                 .buttonStyle(.borderless)
                             }
