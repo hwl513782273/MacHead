@@ -16,14 +16,14 @@ cd MacHead
 
 - 无 SwiftPM / CocoaPods 依赖,`Sources/*.swift` 直接由 `swiftc` 编译。
 - 无需 Apple Developer 证书:构建使用 ad-hoc 签名。
-- `Resources/` 下的第三方二进制(nezha-agent、frpc、cloudflared、serverstatus-client)**不在仓库内**,缺失时构建依然成功,仅相关可选功能不可用;正式发布由 `Scripts/release-local.sh` 自动拉取合并。
+- `Resources/` 下的第三方二进制(nezha-agent、frpc、cloudflared、serverstatus-client)**不在仓库内**,缺失时构建依然成功,仅相关可选功能不可用;正式发布由 GitHub Actions(`release.yml`)自动拉取合并。
 
 ## 项目结构
 
 ```
 Sources/            # Swift 源代码(菜单栏 App、machead CLI、各功能模块)
 Resources/          # Info.plist、图标、Web 面板页面
-Scripts/            # 构建与本地发布流水线
+Scripts/            # 构建辅助脚本(图标生成等)
 website/            # 官网 headlessmac.com(Vite + Cloudflare Pages)
 docs/               # 深入文档(遥测 schema 等)
 ```

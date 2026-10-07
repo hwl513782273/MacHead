@@ -120,14 +120,14 @@ cd MacHead
 MacHead/
 ├── Sources/            # Swift 源代码（App、CLI、各服务模块）
 ├── Resources/          # 应用资源（Info.plist、图标、Web 面板页面）
-├── Scripts/            # 构建/发布脚本（含本地发布流水线 release-local.sh）
+├── Scripts/            # 构建辅助脚本（图标生成等）
 ├── website/            # 官网 headlessmac.com（Vite + Cloudflare Pages）
 ├── docs/               # 深入文档
 ├── build.sh            # 一键构建安装脚本
 └── .github/workflows/  # CI/CD（版本发布、官网部署）
 ```
 
-欢迎提交 [Issue](https://github.com/ox01024/MacHead/issues) 与 Pull Request：反馈 bug 请附上 macOS 版本与机型；功能建议请先描述使用场景。仓库维护者发版使用 `Scripts/release-local.sh`。
+欢迎提交 [Issue](https://github.com/ox01024/MacHead/issues) 与 Pull Request：反馈 bug 请附上 macOS 版本与机型；功能建议请先描述使用场景。仓库维护者通过推送 `v*` 附注标签触发 GitHub Actions 自动发版（构建、DMG、R2 上传、appcast、GitHub Release 一条龙）。
 
 ---
 
