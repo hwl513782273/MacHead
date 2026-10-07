@@ -99,6 +99,7 @@ machead --disable   # 恢复正常模式
 - **遥测完全匿名**：仅收集随机生成的本地 UUID、系统/应用版本、CPU 架构与功能开关状态（布尔值），**不含**任何硬件序列号、网络地址、账号凭据或使用内容。
 - **一键退出**：偏好设置 → 常规设置 → 关闭「匿名使用统计」即不再发送任何数据。
 - **零第三方 SDK**：自建轻量 HTTP 上报，无任何广告/分析组件。
+- 完整字段清单与数据处理方式见 [PRIVACY.md](PRIVACY.md)；漏洞上报方式见 [SECURITY.md](SECURITY.md)。
 
 ---
 
@@ -109,8 +110,11 @@ machead --disable   # 恢复正常模式
 ```bash
 git clone https://github.com/ox01024/MacHead.git
 cd MacHead
-./build.sh   # 编译通用二进制并安装到 /Applications
+./build.sh --no-install   # 编译通用二进制,产物留在当前目录 ./MacHead.app
+./build.sh                # 编译并安装到 /Applications(会重启 App)
 ```
+
+无需 Apple Developer 证书(ad-hoc 签名)、无需任何第三方包管理器。`Resources/` 下的可选监控/穿透二进制不入库,缺失时构建依旧成功。详见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ```
 MacHead/

@@ -104,9 +104,23 @@ if [ -f "Resources/devtunnel" ]; then
   chmod +x "${APP_DIR}/Contents/Resources/devtunnel"
 fi
 
+# Optional: skip installing to /Applications and relaunching (for contributors / CI)
+# Usage: ./build.sh [version] [build] [--no-install]
+NO_INSTALL=0
+for arg in "$@"; do
+  if [ "$arg" = "--no-install" ]; then
+    NO_INSTALL=1
+  fi
+done
+
 # Apply ad-hoc signature (required for ARM64 macOS binaries and icon rendering)
 echo "Ad-hoc signing the application bundle..."
 codesign --force --deep --sign - "${APP_DIR}"
+
+if [ "${NO_INSTALL}" -eq 1 ]; then
+  echo "Build successful! Created Universal ${APP_DIR} in the current directory (--no-install)."
+  exit 0
+fi
 
 # Automatically copy to the system Applications folder
 echo "Installing to /Applications..."

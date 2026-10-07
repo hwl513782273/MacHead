@@ -13,3 +13,11 @@ Resources/devtunnel
 # Wrangler 本地状态（含账号信息与 Miniflare 数据库，不入库）
 .wrangler/
 node_modules/
+
+# 安全与本地环境（开源加固）
+.env*
+*.mobileprovision
+*.p12
+*.cer
+DerivedData/
+build/
