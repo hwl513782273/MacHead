@@ -9,7 +9,7 @@ description: Detailed schema, rules, and URL configurations for managing the Mac
 ## 1. 物理托管路径
 - 版本清单文件必须保存在前端静态资产目录中：`website/public/appcast.json`。
 - **变更机制**：该文件只能由发版流水线（GitHub Actions `release.yml` 的 "Update appcast.json" 步骤）自动更新并随 `chore(release): update appcast.json for vX` 提交入库，禁止脱离发版手动改版本字段后直推 `main`。
-- **发布机制**：appcast.json 随官网静态资源一起发布——appcast 提交命中 `website/**` 路径后由 `deploy.yml` 自动部署到 GitHub Pages；最终公网地址：`https://headlessmac.com/appcast.json`。
+- **发布机制**：appcast.json 随官网静态资源一起发布——发版流水线把 appcast 提交推送到 main 后，由 **Cloudflare Pages 的 Git 集成**自动构建部署（注意：该 bot 提交不触发 Actions，`deploy.yml`→gh-pages 是不服务线上域名的遗留路径）；最终公网地址：`https://headlessmac.com/appcast.json`。
 
 ## 2. 字段 Schema 定义
 `appcast.json` 包含以下 5 个核心必填字段：

@@ -30,7 +30,7 @@ git push origin main --tags
 4. **R2 上传**:`wrangler r2 object put headlessmac-releases/<DMG>`
 5. **appcast**:更新 `website/public/appcast.json` 五字段 → bot 提交 `chore(release): update appcast.json for vX` 并推 main
 6. **GitHub Release**:自动创建,标题为裸 `vX`(tag 名,不带 "MacHead" 前缀——仓库上下文已有产品名,与 GitHub 生态惯例一致),DMG 挂为资产,附自动生成的技术提交日志
-7. **官网部署**(级联):appcast 提交命中 `website/**` 路径触发 `deploy.yml`,官网静态资源连同 appcast.json 一起部署到 Pages,OTA 立即生效
+7. **官网部署**(级联):appcast 提交推送到 main 后,由 **Cloudflare Pages 的 Git 集成**自动构建部署 headlessmac.com,OTA 立即生效。注意:该提交由 GITHUB_TOKEN 产生,按 GitHub 设计**不会**级联触发 Actions,`deploy.yml`→gh-pages 这条路对发版提交不生效(gh-pages 为遗留分支,不服务线上域名)
 
 ## 3. 发布后核验
 
