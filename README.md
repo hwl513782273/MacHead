@@ -19,7 +19,7 @@
 </p>
 
 <p align="center">
-  <img src="website/public/machead_hero.jpg" width="720" alt="MacBook 合盖驱动外接显示器，化身无头服务器" />
+  <img src="website/public/machead_console.jpg" width="720" alt="MacHead 远程控制台与偏好设置：实时监控 CPU/内存/GPU/电池,远程管理无头工作站" />
 </p>
 
 **MacHead** 是一款轻量、零依赖的 macOS 原生开源工具，专为把闲置 MacBook（内屏损坏的、打算合盖吃灰的、或想当专用桌面服务器/软路由的）重塑为一台高效、稳定、安全的 **Headless 无头工作站**。开盖是笔记本，合盖是服务器。
