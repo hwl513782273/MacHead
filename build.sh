@@ -62,15 +62,21 @@ rm "${MACOS_DIR}/${APP_NAME}_arm64" "${MACOS_DIR}/${APP_NAME}_x86_64"
 # Copy Info.plist to the bundle
 cp Resources/Info.plist "${APP_DIR}/Contents/Info.plist"
 
+# Parse arguments: [version] [build] [--no-install]
+# --no-install: build only, skip installing to /Applications and relaunching (for contributors / CI)
+NO_INSTALL=0
+ARGS=()
+for arg in "$@"; do
+  if [ "$arg" = "--no-install" ]; then
+    NO_INSTALL=1
+  else
+    ARGS+=("$arg")
+  fi
+done
+
 # Set version and build if arguments are provided
-VERSION="1.0.0"
-BUILD="1"
-if [ ! -z "$1" ]; then
-  VERSION="$1"
-fi
-if [ ! -z "$2" ]; then
-  BUILD="$2"
-fi
+VERSION="${ARGS[0]:-1.0.0}"
+BUILD="${ARGS[1]:-1}"
 
 echo "Setting bundle version in Info.plist: Version ${VERSION} (Build ${BUILD})"
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${VERSION}" "${APP_DIR}/Contents/Info.plist"
@@ -103,15 +109,6 @@ if [ -f "Resources/devtunnel" ]; then
   cp Resources/devtunnel "${APP_DIR}/Contents/Resources/devtunnel"
   chmod +x "${APP_DIR}/Contents/Resources/devtunnel"
 fi
-
-# Optional: skip installing to /Applications and relaunching (for contributors / CI)
-# Usage: ./build.sh [version] [build] [--no-install]
-NO_INSTALL=0
-for arg in "$@"; do
-  if [ "$arg" = "--no-install" ]; then
-    NO_INSTALL=1
-  fi
-done
 
 # Apply ad-hoc signature (required for ARM64 macOS binaries and icon rendering)
 echo "Ad-hoc signing the application bundle..."
