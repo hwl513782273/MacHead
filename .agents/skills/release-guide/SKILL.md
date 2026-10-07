@@ -1,45 +1,54 @@
 ---
 name: release-guide
-description: Complete step-by-step guide for building and releasing new versions of MacHead using Git tags and GitHub Actions CI/CD.
+description: Step-by-step guide for releasing new versions of MacHead via the local pipeline Scripts/release-local.sh (build, DMG, R2, appcast, tag, website deploy).
 ---
-# MacHead 版本发布与 CI/CD 流水线指南
+# MacHead 版本发布指南
 
-本技能规定了 MacHead 项目的版本发版流程与 CI/CD 自动化流水线的操作规范。
+本技能规定 MacHead 的标准发版流程。**规范流程是本地流水线 `Scripts/release-local.sh`**(2026-09 起生效);`.github/workflows/release.yml` 是同构的云端等价实现,账号恢复后可用,但以本地流水线为准。
 
-## 1. 发布流程 (Git Tag 驱动)
-项目采用了完全由 Git 标签驱动的云端自动化发布。发版时，严禁本地手动编译 DMG 或手动上传 R2 存储桶。请遵循以下步骤：
+## 0. 前置条件
 
-### 步骤一：在本地仓库打版本标签
-标签名称必须符合 `v*` 格式（如 `v1.1.0`），且必须附带 `-m` 参数写入**给普通用户看的通俗升级日志**（不支持技术提交细节）：
+- macOS 本机,已装 Xcode CLT、Node、Python3、wrangler(`npx wrangler whoami` 已登录,对 R2 桶 `headlessmac-releases` 有写权限)
+- 工作区干净、在 `main` 分支
+- worktree 环境需先从主 checkout 复制 `Resources/` 下不入 git 的二进制(如已跑过一次流水线会自动生成)
+
+## 1. 一键发布
 
 ```bash
-git tag -a v1.1.0 -m "1. 修复了插拔电源时的电池保护误触发问题；\n2. 优化了外接屏幕断开后的恢复速度。"
+./Scripts/release-local.sh <version> "1. 用户可读的升级说明；2. 多条用分号分隔"
+# 示例
+./Scripts/release-local.sh 0.1.24 "新增首次启动遥测告知；修复若干问题"
 ```
 
-### 步骤二：推送标签至远程仓库
-将标签推送至 GitHub，云端会自动识别并触发 `.github/workflows/release.yml` 流水线：
+可选 `--no-push`:本地完成构建/R2/appcast,不推送远程(稍后手动 `git push origin main --tags`)。
+
+流水线 6 步(全自动):
+1. **拉三方二进制**:nezha-agent / ServerStatus client / frpc / cloudflared,双架构下载后 `lipo` 合并 universal(探测上游 latest 失败会明确报错);devtunnel 因微软 EULA 不捆绑
+2. **编译**:`./build.sh <version> <build>`,build 号自动取 appcast.json 当前值 +1
+3. **DMG**:`hdiutil` 打包 `MacHead-v<version>-macos-universal.dmg`
+4. **R2 上传**:`wrangler r2 object put headlessmac-releases/<DMG>`
+5. **appcast + tag**:更新 `website/public/appcast.json` 五字段 → commit(`chore(release): update appcast.json for vX`)→ 附注 tag `vX`(tag message = 用户可读发布说明)
+6. **官网部署**:`cd website && npm run build && npx wrangler pages deploy dist --branch=main`(appcast.json 随静态资源发布,OTA 立即生效)
+
+发布说明未显式给出时,自动取上一个 tag 之后的 commit 标题(过滤 chore(release)/merge)。
+
+## 2. 发布后补建 GitHub Release(可选)
+
+本地流水线不创建 GitHub Release 页面。账号恢复后可补挂:
 
 ```bash
-git push origin v1.1.0
+gh release create vX --title "MacHead vX" --latest --notes "…(与 appcast releaseNotes 一致)" "MacHead-vX-macos-universal.dmg"
 ```
 
----
+## 3. 禁止事项
 
-## 2. 云端 Actions 流水线工作细节
-流水线触发后，会在 `macos-latest` 环境中执行以下原子任务：
-1. **源码编译**：执行 `./build.sh` 编译 Universal 二进制。
-2. **DMG 打包**：通过 `hdiutil create` 隐藏打包生成 `MacHead-v[Version]-macos-universal.dmg`。
-3. **R2 部署**：调用 Wrangler 命令行，使用 GitHub Secrets 鉴权将安装包静默上传至 Cloudflare R2 的 `headlessmac-releases` 存储桶中。
-4. **回写 appcast.json**：
-   - 提取您在打 Tag 时手写的注释内容，将其更新到 `website/public/appcast.json` 的 `releaseNotes` 中。
-   - 使用 GitHub Bot 将 JSON 的变更提交并 Push 回 `main` 分支，进而触发 Cloudflare Pages 重构热更新。
-5. **双轨日志发布**：
-   - 自动在 GitHub 上创建一个对应的 Release 网页，并将编译好的 DMG 作为附件挂载。
-   - **自动汇总技术提交**：Release 网页的 Body 部分会自动基于两个版本之间的 Commit 历史生成详细的技术细节变更日志，与面向用户的普通日志实现分离。
+- 严禁跳过流水线手动改 appcast.json 版本字段后直接推 main(会触发 OTA 推给全量用户)
+- 严禁把 DMG 直接 commit 进仓库
+- devtunnel 严禁下载捆绑(微软专有 EULA)
 
----
+## 4. 开发构建(非发布)
 
-## 3. 流水线环境变量 (Secrets)
-若流水线报错或需要重构，请确保 GitHub 仓库的 Settings 中已正确配置以下密钥：
-- `CLOUDFLARE_API_TOKEN`: 拥有 R2 桶读写编辑权限的永久 Cloudflare API 令牌。
-- `CLOUDFLARE_ACCOUNT_ID`: Cloudflare 账户 ID（在 Cloudflare 控制台首页右侧查看，勿写入库）。
+```bash
+./build.sh --no-install   # 只编译,产物 ./MacHead.app,不装 /Applications、不重启
+./build.sh                # 编译 + 安装 + 重启(开发者日常)
+```
