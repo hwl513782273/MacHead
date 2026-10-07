@@ -19,9 +19,10 @@ MacHead 在构建期（CI）下载并在运行时按需集成以下第三方工�
   许可证：Apache License 2.0
   https://github.com/nezhahq/agent
 
-* ServerStatus 客户端
-  版权归上游项目原作者所有，许可证以对应上游仓库声明为准
-  https://github.com/cppla/ServerStatus
+* ServerStatus 客户端 (stat_client,ServerStatus-Rust)
+  版权所有 zdz 及 ServerStatus-Rust 项目贡献者
+  许可证：Apache License 2.0
+  https://github.com/zdz/ServerStatus-Rust
 
 * cloudflared (Cloudflare Tunnel 客户端)
   版权所有 Cloudflare, Inc.
