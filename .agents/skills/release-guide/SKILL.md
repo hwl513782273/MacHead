@@ -37,8 +37,10 @@ description: Step-by-step guide for releasing new versions of MacHead via the lo
 本地流水线不创建 GitHub Release 页面。账号恢复后可补挂:
 
 ```bash
-gh release create vX --title "MacHead vX" --latest --notes "…(与 appcast releaseNotes 一致)" "MacHead-vX-macos-universal.dmg"
+gh release create vX --latest --notes "…(与 appcast releaseNotes 一致)" "MacHead-vX-macos-universal.dmg"
 ```
+
+Release 标题统一用裸 `vX`(即 tag 名,不带 "MacHead" 前缀——仓库上下文已有产品名,与 GitHub 生态惯例一致);`gh release create` 不传 `--title` 时默认就是 tag 名,不要额外指定。
 
 ## 3. 禁止事项
 
